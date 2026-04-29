@@ -2,7 +2,34 @@
 
   <ItemGroup>
     <ProjectReference Include="..\WpfInspector.Core\WpfInspector.Core.csproj" />
+    <ProjectReference Include="..\WpfInspector.Injector\WpfInspector.Injector.csproj" />
+    <ProjectReference Include="..\WpfInspector.InspectionPayload\WpfInspector.InspectionPayload.csproj" />
   </ItemGroup>
+
+  <!-- ネイティブ Bootstrap DLL (MSVC でビルドしたもの) をアプリ出力へコピー -->
+  <ItemGroup>
+    <Content Include="$(MSBuildThisFileDirectory)..\WpfInspector.NativeBootstrap\x64\Debug\WpfInspector.NativeBootstrap.dll"
+             Condition="Exists('$(MSBuildThisFileDirectory)..\WpfInspector.NativeBootstrap\x64\Debug\WpfInspector.NativeBootstrap.dll')"
+             CopyToOutputDirectory="PreserveNewest"
+             Link="WpfInspector.NativeBootstrap.dll" />
+    <Content Include="$(MSBuildThisFileDirectory)..\WpfInspector.NativeBootstrap\x64\Release\WpfInspector.NativeBootstrap.dll"
+             Condition="Exists('$(MSBuildThisFileDirectory)..\WpfInspector.NativeBootstrap\x64\Release\WpfInspector.NativeBootstrap.dll')"
+             CopyToOutputDirectory="PreserveNewest"
+             Link="WpfInspector.NativeBootstrap.dll" />
+  </ItemGroup>
+
+  <!-- InspectionPayload をビルドしてアプリ出力へコピー -->
+  <Target Name="CopyInspectionPayload" AfterTargets="Build">
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.InspectionPayload\WpfInspector.InspectionPayload.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration)" />
+    <ItemGroup>
+      <_PayloadFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.InspectionPayload\bin\$(Configuration)\net9.0-windows\WpfInspector.InspectionPayload.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_PayloadFiles)"
+          DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="true" />
+  </Target>
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>

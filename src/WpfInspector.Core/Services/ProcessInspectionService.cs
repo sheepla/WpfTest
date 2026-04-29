@@ -24,7 +24,8 @@ public sealed class ProcessInspectionService : IProcessInspectionService
                     ProcessName: SafeGet(() => process.ProcessName, "<unknown>"),
                     WindowTitle: SafeGet(() => process.MainWindowTitle, string.Empty),
                     ExecutablePath: SafeGetNullable(() => process.MainModule?.FileName),
-                    IsResponding: SafeGet(() => process.Responding, false)));
+                    IsResponding: SafeGet(() => process.Responding, false),
+                    IsCurrentProcess: SafeGet(() => process.Id, -1) == Environment.ProcessId));
             }
         }
 
@@ -45,7 +46,8 @@ public sealed class ProcessInspectionService : IProcessInspectionService
             ProcessName: SafeGet(() => process.ProcessName, "<unknown>"),
             WindowTitle: SafeGet(() => process.MainWindowTitle, string.Empty),
             ExecutablePath: SafeGetNullable(() => process.MainModule?.FileName),
-            IsResponding: SafeGet(() => process.Responding, false));
+            IsResponding: SafeGet(() => process.Responding, false),
+            IsCurrentProcess: SafeGet(() => process.Id, processId) == Environment.ProcessId);
 
         var mainModulePath = SafeGetNullable(() => process.MainModule?.FileName);
         if (string.IsNullOrWhiteSpace(mainModulePath))
@@ -55,6 +57,8 @@ public sealed class ProcessInspectionService : IProcessInspectionService
 
         var modules = ReadModules(process, notes);
 
+        AppendDiagnosticNotes(modules, mainModulePath, notes);
+
         return new ProcessInspectionSnapshot(
             Summary: summary,
             MainModulePath: mainModulePath,
@@ -62,6 +66,27 @@ public sealed class ProcessInspectionService : IProcessInspectionService
             WorkingSetBytes: SafeGet(() => process.WorkingSet64, 0L),
             Modules: modules,
             Notes: notes);
+    }
+
+    private static void AppendDiagnosticNotes(IReadOnlyList<ProcessModuleInfo> modules, string? mainModulePath, List<string> notes)
+    {
+        var wpfRuntimeModule = WpfModuleDetection.FindRuntimeModule(modules);
+
+        if (wpfRuntimeModule is not null)
+        {
+            var version = SafeGetNullable(() =>
+                FileVersionInfo.GetVersionInfo(wpfRuntimeModule.ModulePath).ProductVersion);
+            notes.Add(version is not null
+                ? $"WPF プロセス: {wpfRuntimeModule.ModuleName} {version}"
+                : $"WPF プロセス: {wpfRuntimeModule.ModuleName}");
+        }
+
+        var mainModuleInfo = modules.FirstOrDefault(m =>
+            string.Equals(m.ModulePath, mainModulePath, StringComparison.OrdinalIgnoreCase));
+        if (mainModuleInfo?.SymbolInfo?.Architecture is { } arch)
+        {
+            notes.Add($"アーキテクチャ: {arch}");
+        }
     }
 
     private IReadOnlyList<ProcessModuleInfo> ReadModules(Process process, List<string> notes)
@@ -120,4 +145,3 @@ public sealed class ProcessInspectionService : IProcessInspectionService
         }
     }
 }
-

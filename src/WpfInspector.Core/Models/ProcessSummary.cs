@@ -5,5 +5,5 @@ public sealed record ProcessSummary(
     string ProcessName,
     string WindowTitle,
     string? ExecutablePath,
-    bool IsResponding);
-
+    bool IsResponding,
+    bool IsCurrentProcess = false);

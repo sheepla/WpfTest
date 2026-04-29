@@ -3,6 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:models="clr-namespace:WpfInspector.Core.Models;assembly=WpfInspector.Core"
+        xmlns:converters="clr-namespace:WpfInspector.App.Converters"
         mc:Ignorable="d"
         Title="WpfInspector"
         Height="920"
@@ -21,6 +23,7 @@
         <SolidColorBrush x:Key="AccentSoftBrush" Color="#FFDDF4F1" />
         <SolidColorBrush x:Key="HeroBrush" Color="#FF123848" />
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+        <converters:NullToCollapsedConverter x:Key="NullToCollapsedConverter" />
 
         <Style x:Key="CardStyle" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
@@ -89,7 +92,7 @@
                     <TextBlock Margin="0,8,0,0"
                                FontSize="14"
                                Foreground="#FFD4E7EE"
-                               Text="WPF プロセスの状態、モジュール、Portable PDB を一画面で解析するデスクトップツール" />
+                               Text="選択した WPF プロセス、または WpfInspector 自身を走査し、ランタイム情報を使って PDB と UI ツリーを解析するデスクトップツール" />
                 </StackPanel>
 
                 <Border DockPanel.Dock="Right"
@@ -101,11 +104,11 @@
                         <TextBlock FontSize="12"
                                    FontWeight="SemiBold"
                                    Foreground="#FFF4D06F"
-                                   Text="SECURITY BOUNDARY" />
+                                   Text="INSPECTION FLOW" />
                         <TextBlock Margin="0,6,0,0"
                                    TextWrapping="Wrap"
                                    Foreground="White"
-                                   Text="任意 DLL 注入は含めず、プロセス観測と PE / PDB 解析に限定しています。将来拡張は安全なアタッチ方式を前提にします。" />
+                                   Text="プロセス一覧から WPF を選択すると、ランタイム UI 情報を取得し、その結果を使って解析対象 PDB を自動決定できます。WpfInspector 自身を選んだ場合は直接走査します。" />
                     </StackPanel>
                 </Border>
             </DockPanel>
@@ -135,7 +138,7 @@
                                    Text="Process Explorer" />
                         <TextBlock Margin="0,6,0,0"
                                    Foreground="{StaticResource MutedBrush}"
-                                   Text="実行中プロセスを選択し、対象アプリの状態とモジュール構成を確認します。" />
+                                   Text="実行中プロセスから対象 WPF を選択し、Self 列で WpfInspector 自身を見分けながら状態確認と解析対象の確定を行います。" />
                     </StackPanel>
 
                     <Grid Grid.Row="1"
@@ -146,11 +149,13 @@
                         </Grid.ColumnDefinitions>
 
                         <TextBox Grid.Column="0"
+                                 x:Name="ProcessFilterTextBox"
                                  Margin="0,0,12,0"
                                  VerticalContentAlignment="Center"
                                  Text="{Binding ProcessFilter, UpdateSourceTrigger=PropertyChanged}" />
 
                         <Button Grid.Column="1"
+                                x:Name="RefreshButton"
                                 Width="112"
                                 Click="RefreshButton_OnClick"
                                 Content="Refresh" />
@@ -168,6 +173,9 @@
                             <DataGridTextColumn Header="PID"
                                                 Width="90"
                                                 Binding="{Binding ProcessId}" />
+                            <DataGridCheckBoxColumn Header="Self"
+                                                    Width="70"
+                                                    Binding="{Binding IsCurrentProcess}" />
                             <DataGridCheckBoxColumn Header="Alive"
                                                     Width="80"
                                                     Binding="{Binding IsResponding}" />
@@ -185,9 +193,37 @@
                             BorderBrush="{StaticResource LineBrush}"
                             BorderThickness="1">
                         <StackPanel>
-                            <TextBlock FontSize="18"
-                                       FontWeight="SemiBold"
-                                       Text="{Binding SelectedProcessHeadline}" />
+                            <DockPanel>
+                                <StackPanel DockPanel.Dock="Right"
+                                            Orientation="Horizontal">
+                                    <Border Margin="0,0,8,0"
+                                            Padding="10,4"
+                                            CornerRadius="10"
+                                            Background="#FFE7EEF7"
+                                            Visibility="{Binding SelectedProcessSnapshot.Summary.IsCurrentProcess, Converter={StaticResource BoolToVisibilityConverter}}"
+                                            VerticalAlignment="Center">
+                                        <TextBlock FontSize="12"
+                                                   FontWeight="Bold"
+                                                   Foreground="#FF365B7D"
+                                                   Text="SELF" />
+                                    </Border>
+                                    <Border Padding="10,4"
+                                            CornerRadius="10"
+                                            Background="{StaticResource AccentSoftBrush}"
+                                            Visibility="{Binding IsWpfProcess, Converter={StaticResource BoolToVisibilityConverter}}"
+                                            VerticalAlignment="Center">
+                                        <TextBlock FontSize="12"
+                                                   FontWeight="Bold"
+                                                   Foreground="{StaticResource AccentBrush}"
+                                                   Text="WPF" />
+                                    </Border>
+                                </StackPanel>
+                                <TextBlock FontSize="18"
+                                           FontWeight="SemiBold"
+                                           x:Name="SelectedProcessHeadlineText"
+                                           Text="{Binding SelectedProcessHeadline}"
+                                           VerticalAlignment="Center" />
+                            </DockPanel>
                             <TextBlock Margin="0,8,0,0"
                                        Foreground="{StaticResource MutedBrush}"
                                        Text="{Binding SelectedProcessPath}"
@@ -207,8 +243,8 @@
             <Grid Grid.Column="1"
                   Margin="12,0,0,0">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="0.92*" />
-                    <RowDefinition Height="1.08*" />
+                    <RowDefinition Height="0.74*" />
+                    <RowDefinition Height="1.26*" />
                 </Grid.RowDefinitions>
 
                 <Border Grid.Row="0"
@@ -228,7 +264,7 @@
                                        Text="Loaded Modules" />
                             <TextBlock Margin="0,6,0,0"
                                        Foreground="{StaticResource MutedBrush}"
-                                       Text="CodeView 情報を読み取り、対象モジュールの PDB 候補とシンボル状態を推定します。" />
+                                       Text="CodeView 情報を読み取り、選択した WPF のメインモジュールと関連 PDB 候補を確認します。自己プロセスでも同じ基準で候補を表示します。" />
                         </StackPanel>
 
                         <DataGrid x:Name="ModulesGrid"
@@ -262,15 +298,28 @@
                                 Padding="14"
                                 CornerRadius="18"
                                 Background="{StaticResource AccentSoftBrush}">
-                            <DockPanel>
-                                <TextBlock VerticalAlignment="Center"
-                                           Text="{Binding SelectedModuleSummary}" />
-                                <Button DockPanel.Dock="Right"
-                                        Width="180"
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0"
+                                            Margin="0,0,12,0">
+                                    <TextBlock FontWeight="SemiBold"
+                                               Text="{Binding SelectedModuleSummary}" />
+                                    <TextBlock Margin="0,6,0,0"
+                                               x:Name="SelectedProcessPdbSummaryText"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               Text="{Binding SelectedProcessPdbSummary}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                                <Button Grid.Column="1"
+                                        Width="196"
+                                        VerticalAlignment="Center"
                                         IsEnabled="{Binding CanUseSelectedModulePdb}"
                                         Click="UseSelectedModulePdbButton_OnClick"
-                                        Content="Use Selected Module PDB" />
-                            </DockPanel>
+                                        Content="選択モジュールのPDBを使う" />
+                            </Grid>
                         </Border>
                     </Grid>
                 </Border>
@@ -283,8 +332,6 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
@@ -292,143 +339,365 @@
                                     Margin="0,0,0,14">
                             <TextBlock FontSize="22"
                                        FontWeight="SemiBold"
-                                       Text="Portable PDB Analyzer" />
+                                       Text="Analysis Console" />
                             <TextBlock Margin="0,6,0,0"
                                        Foreground="{StaticResource MutedBrush}"
-                                       Text="PDB と任意のアセンブリを指定し、ソース文書とメソッド単位のデバッグ情報を解析します。" />
+                                       Text="選択した WPF プロセスを対象に、UI 走査で収集したランタイム情報と PDB 解析結果を一画面で確認します。WpfInspector 自身を選んだ場合も同じ画面で検証できます。" />
                         </StackPanel>
 
                         <Grid Grid.Row="1"
-                              Margin="0,0,0,10">
+                              Margin="0,0,0,14">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
 
-                            <TextBlock Grid.Column="0"
-                                       Margin="0,0,12,0"
-                                       VerticalAlignment="Center"
-                                       FontWeight="SemiBold"
-                                       Text="PDB" />
-                            <TextBox Grid.Column="1"
-                                     Margin="0,0,12,0"
-                                     Text="{Binding PdbPath, UpdateSourceTrigger=PropertyChanged}" />
-                            <Button Grid.Column="2"
-                                    Width="92"
-                                    Click="BrowsePdbButton_OnClick"
-                                    Content="Browse" />
+                            <Border Grid.Column="0"
+                                    Margin="0,0,8,0"
+                                    Padding="14"
+                                    CornerRadius="18"
+                                    Background="{StaticResource PanelBrush}"
+                                    BorderBrush="{StaticResource LineBrush}"
+                                    BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock FontSize="11"
+                                               FontWeight="Bold"
+                                               Foreground="{StaticResource AccentBrush}"
+                                               Text="STEP 1" />
+                                    <TextBlock Margin="0,8,0,0"
+                                               FontSize="16"
+                                               FontWeight="SemiBold"
+                                               Text="Target WPF" />
+                                    <TextBlock Margin="0,8,0,0"
+                                               FontWeight="SemiBold"
+                                               Text="{Binding SelectedProcessHeadline}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,6,0,0"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               Text="{Binding SelectedProcessPdbSummary}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Column="1"
+                                    Margin="8,0"
+                                    Padding="14"
+                                    CornerRadius="18"
+                                    Background="{StaticResource AccentSoftBrush}"
+                                    BorderBrush="{StaticResource LineBrush}"
+                                    BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock FontSize="11"
+                                               FontWeight="Bold"
+                                               Foreground="{StaticResource AccentBrush}"
+                                               Text="STEP 2" />
+                                    <TextBlock Margin="0,8,0,0"
+                                               FontSize="16"
+                                               FontWeight="SemiBold"
+                                               Text="Runtime Scan" />
+                                    <TextBlock Margin="0,8,0,0"
+                                               FontWeight="SemiBold"
+                                               Text="{Binding UiResultSummary}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,6,0,0"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               Text="{Binding RuntimeAssemblySummary}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Column="2"
+                                    Margin="8,0,0,0"
+                                    Padding="14"
+                                    CornerRadius="18"
+                                    Background="White"
+                                    BorderBrush="{StaticResource LineBrush}"
+                                    BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock FontSize="11"
+                                               FontWeight="Bold"
+                                               Foreground="{StaticResource AccentBrush}"
+                                               Text="STEP 3" />
+                                    <TextBlock Margin="0,8,0,0"
+                                               FontSize="16"
+                                               FontWeight="SemiBold"
+                                               Text="Portable PDB" />
+                                    <TextBlock Margin="0,8,0,0"
+                                               FontWeight="SemiBold"
+                                               Text="{Binding PdbResultSummary}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,6,0,0"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               Text="{Binding SelectedProcessPdbSummary}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
                         </Grid>
 
-                        <Grid Grid.Row="2"
-                              Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-
-                            <TextBlock Grid.Column="0"
-                                       Margin="0,0,12,0"
-                                       VerticalAlignment="Center"
-                                       FontWeight="SemiBold"
-                                       Text="Assembly" />
-                            <TextBox Grid.Column="1"
-                                     Margin="0,0,12,0"
-                                     Text="{Binding AssemblyPath, UpdateSourceTrigger=PropertyChanged}" />
-                            <Button Grid.Column="2"
-                                    Width="92"
-                                    Click="BrowseAssemblyButton_OnClick"
-                                    Content="Browse" />
-                        </Grid>
-
-                        <Border Grid.Row="3"
-                                Margin="0,0,0,14"
+                        <Border Grid.Row="2"
                                 Padding="14"
                                 CornerRadius="18"
                                 Background="{StaticResource PanelBrush}"
                                 BorderBrush="{StaticResource LineBrush}"
                                 BorderThickness="1">
-                            <DockPanel>
-                                <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0"
+                                            Margin="0,0,14,0">
                                     <TextBlock FontWeight="SemiBold"
-                                               Text="{Binding PdbSummary}" />
+                                               Text="{Binding WpfInspectionSummary}"
+                                               TextWrapping="Wrap" />
                                     <TextBlock Margin="0,6,0,0"
                                                Foreground="{StaticResource MutedBrush}"
-                                               Text="{Binding PdbWarningsText}"
+                                               Text="一括実行では、先にランタイム走査を実行します。外部プロセスでは検査ペイロードを注入し、WpfInspector 自身を選んだ場合はアプリ内で直接 UI ツリーを収集します。"
                                                TextWrapping="Wrap" />
                                 </StackPanel>
-                                <Button DockPanel.Dock="Right"
-                                        Width="120"
-                                        Click="AnalyzePdbButton_OnClick"
-                                        Content="Analyze" />
-                            </DockPanel>
+                                <Button Grid.Column="1"
+                                        x:Name="AnalyzeSelectedWpfButton"
+                                        Width="176"
+                                        VerticalAlignment="Center"
+                                        IsEnabled="{Binding CanAnalyzeSelectedWpf}"
+                                        Click="InjectButton_OnClick"
+                                        Content="PDB解析とUI走査" />
+                            </Grid>
                         </Border>
 
-                        <Grid Grid.Row="4"
-                              Margin="0,0,0,12">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
+                        <Grid Grid.Row="3"
+                              Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="0.92*" />
+                                <ColumnDefinition Width="1.08*" />
+                            </Grid.ColumnDefinitions>
 
-                            <TextBlock Grid.Row="0"
-                                       Margin="0,0,0,10"
-                                       FontSize="16"
-                                       FontWeight="SemiBold"
-                                       Text="Documents" />
+                            <Border Grid.Column="0"
+                                    Margin="0,0,12,0"
+                                    Padding="16"
+                                    CornerRadius="20"
+                                    Background="White"
+                                    BorderBrush="{StaticResource LineBrush}"
+                                    BorderThickness="1">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
 
-                            <DataGrid Grid.Row="1"
-                                      ItemsSource="{Binding Documents}">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="Document"
-                                                        Width="3*"
-                                                        Binding="{Binding Name}" />
-                                    <DataGridTextColumn Header="Language"
-                                                        Width="120"
-                                                        Binding="{Binding Language}" />
-                                    <DataGridTextColumn Header="Hash"
-                                                        Width="160"
-                                                        Binding="{Binding HashAlgorithm}" />
-                                    <DataGridTextColumn Header="Hash Size"
-                                                        Width="100"
-                                                        Binding="{Binding HashLength}" />
-                                </DataGrid.Columns>
-                            </DataGrid>
-                        </Grid>
+                                    <StackPanel Grid.Row="0">
+                                        <TextBlock FontSize="18"
+                                                   FontWeight="SemiBold"
+                                                   Text="Visual Tree" />
+                                        <TextBlock Margin="0,6,0,0"
+                                                   Foreground="{StaticResource MutedBrush}"
+                                                   Text="検出したウィンドウを選択すると、ルート要素からビジュアルツリーを展開します。" />
+                                    </StackPanel>
 
-                        <Grid Grid.Row="5">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
+                                    <Grid Grid.Row="1"
+                                          Margin="0,14,0,14">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <Grid Grid.Row="0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0"
+                                                       Margin="0,0,10,0"
+                                                       VerticalAlignment="Center"
+                                                       FontWeight="SemiBold"
+                                                       Text="ウィンドウ" />
+                                            <ComboBox Grid.Column="1"
+                                                      IsEnabled="{Binding HasInspectionResult}"
+                                                      ItemsSource="{Binding InspectedWindows}"
+                                                      SelectedItem="{Binding SelectedInspectedWindow}"
+                                                      DisplayMemberPath="Title" />
+                                        </Grid>
+                                        <TextBlock Grid.Row="1"
+                                                   Margin="0,10,0,0"
+                                                   Foreground="{StaticResource MutedBrush}"
+                                                   Text="{Binding SelectedInspectedWindowSummary}"
+                                                   TextWrapping="Wrap" />
+                                    </Grid>
 
-                            <TextBlock Grid.Row="0"
-                                       Margin="0,0,0,10"
-                                       FontSize="16"
-                                       FontWeight="SemiBold"
-                                       Text="Methods" />
+                                    <Border Grid.Row="2"
+                                            BorderBrush="{StaticResource LineBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="12">
+                                        <TreeView ItemsSource="{Binding SelectedInspectedWindowRoots}"
+                                                  Background="White">
+                                            <TreeView.Resources>
+                                                <HierarchicalDataTemplate DataType="{x:Type models:WpfElementInfo}"
+                                                                          ItemsSource="{Binding Children}">
+                                                    <StackPanel Orientation="Horizontal"
+                                                                Margin="2,1">
+                                                        <TextBlock FontWeight="SemiBold"
+                                                                   Text="{Binding TypeName}"
+                                                                   Foreground="{StaticResource AccentBrush}" />
+                                                        <TextBlock Margin="6,0,0,0"
+                                                                   Text="{Binding Name}"
+                                                                   Foreground="{StaticResource MutedBrush}" />
+                                                        <TextBlock Margin="6,0,0,0"
+                                                                   FontSize="11"
+                                                                   Foreground="{StaticResource MutedBrush}"
+                                                                   Visibility="{Binding DataContextTypeName, Converter={StaticResource NullToCollapsedConverter}}"
+                                                                   Text="{Binding DataContextTypeName, StringFormat=({0})}" />
+                                                    </StackPanel>
+                                                </HierarchicalDataTemplate>
+                                            </TreeView.Resources>
+                                        </TreeView>
+                                    </Border>
+                                </Grid>
+                            </Border>
 
-                            <DataGrid Grid.Row="1"
-                                      ItemsSource="{Binding Methods}">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="Token"
-                                                        Width="120"
-                                                        Binding="{Binding Token, StringFormat=0x{0:X8}}" />
-                                    <DataGridTextColumn Header="Method"
-                                                        Width="2.4*"
-                                                        Binding="{Binding DisplayName}" />
-                                    <DataGridTextColumn Header="Document"
-                                                        Width="2*"
-                                                        Binding="{Binding Document}" />
-                                    <DataGridTextColumn Header="Seq"
-                                                        Width="90"
-                                                        Binding="{Binding SequencePointCount}" />
-                                    <DataGridTextColumn Header="Visible"
-                                                        Width="90"
-                                                        Binding="{Binding VisibleSequencePointCount}" />
-                                </DataGrid.Columns>
-                            </DataGrid>
+                            <Border Grid.Column="1"
+                                    Margin="12,0,0,0"
+                                    Padding="16"
+                                    CornerRadius="20"
+                                    Background="White"
+                                    BorderBrush="{StaticResource LineBrush}"
+                                    BorderThickness="1">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
+
+                                    <StackPanel Grid.Row="0">
+                                        <TextBlock FontSize="18"
+                                                   FontWeight="SemiBold"
+                                                   Text="PDB Details" />
+                                        <TextBlock Margin="0,6,0,0"
+                                                   Foreground="{StaticResource MutedBrush}"
+                                                   Text="走査後に解決した対象 PDB が自動入力されます。必要に応じて別パスへ切り替えて確認できます。" />
+                                    </StackPanel>
+
+                                    <Grid Grid.Row="1"
+                                          Margin="0,14,0,10">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+
+                                        <Grid Grid.Row="0"
+                                              Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <TextBlock Grid.Column="0"
+                                                       Margin="0,0,12,0"
+                                                       VerticalAlignment="Center"
+                                                       FontWeight="SemiBold"
+                                                       Text="PDB" />
+                                            <TextBox Grid.Column="1"
+                                                     Margin="0,0,12,0"
+                                                     Text="{Binding PdbPath, UpdateSourceTrigger=PropertyChanged}" />
+                                            <Button Grid.Column="2"
+                                                    Width="92"
+                                                    Click="BrowsePdbButton_OnClick"
+                                                    Content="Browse" />
+                                        </Grid>
+
+                                        <Grid Grid.Row="1">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <TextBlock Grid.Column="0"
+                                                       Margin="0,0,12,0"
+                                                       VerticalAlignment="Center"
+                                                       FontWeight="SemiBold"
+                                                       Text="Assembly" />
+                                            <TextBox Grid.Column="1"
+                                                     Margin="0,0,12,0"
+                                                     Text="{Binding AssemblyPath, UpdateSourceTrigger=PropertyChanged}" />
+                                            <Button Grid.Column="2"
+                                                    Width="92"
+                                                    Click="BrowseAssemblyButton_OnClick"
+                                                    Content="Browse" />
+                                        </Grid>
+                                    </Grid>
+
+                                    <Border Grid.Row="2"
+                                            Padding="14"
+                                            CornerRadius="18"
+                                            Background="{StaticResource PanelBrush}"
+                                            BorderBrush="{StaticResource LineBrush}"
+                                            BorderThickness="1">
+                                        <DockPanel>
+                                            <StackPanel>
+                                                <TextBlock FontWeight="SemiBold"
+                                                           Text="{Binding PdbSummary}" />
+                                                <TextBlock Margin="0,6,0,0"
+                                                           Foreground="{StaticResource MutedBrush}"
+                                                           Text="{Binding PdbWarningsText}"
+                                                           TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <Button DockPanel.Dock="Right"
+                                                    Width="120"
+                                                    Click="AnalyzePdbButton_OnClick"
+                                                    Content="Analyze" />
+                                        </DockPanel>
+                                    </Border>
+
+                                    <TabControl Grid.Row="3"
+                                                Margin="0,14,0,0"
+                                                Background="Transparent"
+                                                BorderThickness="0">
+                                        <TabItem Header="Documents">
+                                            <DataGrid ItemsSource="{Binding Documents}">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="Document"
+                                                                        Width="3*"
+                                                                        Binding="{Binding Name}" />
+                                                    <DataGridTextColumn Header="Language"
+                                                                        Width="120"
+                                                                        Binding="{Binding Language}" />
+                                                    <DataGridTextColumn Header="Hash"
+                                                                        Width="160"
+                                                                        Binding="{Binding HashAlgorithm}" />
+                                                    <DataGridTextColumn Header="Hash Size"
+                                                                        Width="100"
+                                                                        Binding="{Binding HashLength}" />
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+                                        </TabItem>
+                                        <TabItem Header="Methods">
+                                            <DataGrid ItemsSource="{Binding Methods}">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="Token"
+                                                                        Width="120"
+                                                                        Binding="{Binding Token, StringFormat=0x{0:X8}}" />
+                                                    <DataGridTextColumn Header="Method"
+                                                                        Width="2.4*"
+                                                                        Binding="{Binding DisplayName}" />
+                                                    <DataGridTextColumn Header="Document"
+                                                                        Width="2*"
+                                                                        Binding="{Binding Document}" />
+                                                    <DataGridTextColumn Header="Seq"
+                                                                        Width="90"
+                                                                        Binding="{Binding SequencePointCount}" />
+                                                    <DataGridTextColumn Header="Visible"
+                                                                        Width="90"
+                                                                        Binding="{Binding VisibleSequencePointCount}" />
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+                                        </TabItem>
+                                    </TabControl>
+                                </Grid>
+                            </Border>
                         </Grid>
                     </Grid>
                 </Border>
@@ -451,6 +720,7 @@
                              IsIndeterminate="True"
                              Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}" />
                 <TextBlock VerticalAlignment="Center"
+                           x:Name="StatusMessageText"
                            Foreground="{StaticResource MutedBrush}"
                            Text="{Binding StatusMessage}" />
             </DockPanel>

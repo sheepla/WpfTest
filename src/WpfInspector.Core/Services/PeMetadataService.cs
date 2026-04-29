@@ -17,6 +17,13 @@ public sealed class PeMetadataService : IPeMetadataService
             using var stream = File.OpenRead(modulePath);
             using var peReader = new PEReader(stream, PEStreamOptions.Default);
 
+            var architecture = peReader.PEHeaders.PEHeader?.Magic switch
+            {
+                PEMagic.PE32Plus => "x64",
+                PEMagic.PE32 => "x86",
+                _ => null
+            };
+
             var entries = peReader.ReadDebugDirectory();
             if (entries.IsEmpty)
             {
@@ -27,7 +34,8 @@ public sealed class PeMetadataService : IPeMetadataService
                     Signature: null,
                     Age: null,
                     HasEmbeddedPortablePdb: false,
-                    SymbolState: "Debug Directory なし");
+                    SymbolState: "Debug Directory なし",
+                    Architecture: architecture);
             }
 
             string? originalPdbPath = null;
@@ -78,7 +86,8 @@ public sealed class PeMetadataService : IPeMetadataService
                 Signature: signature,
                 Age: age,
                 HasEmbeddedPortablePdb: hasEmbeddedPortablePdb,
-                SymbolState: symbolState);
+                SymbolState: symbolState,
+                Architecture: architecture);
         }
         catch
         {

@@ -1,6 +1,7 @@
 using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
+using WpfInspector.App.Services;
 using WpfInspector.App.ViewModels;
 using WpfInspector.Core.Services;
 
@@ -15,7 +16,8 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = new MainViewModel(
             new ProcessInspectionService(new PeMetadataService()),
-            new PortablePdbAnalysisService());
+            new PortablePdbAnalysisService(),
+            new WpfInjectionService());
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -81,5 +83,10 @@ public partial class MainWindow : Window
         }
 
         await ViewModel.AnalyzePdbAsync();
+    }
+
+    private async void InjectButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        await ViewModel.AnalyzeSelectedWpfAsync();
     }
 }

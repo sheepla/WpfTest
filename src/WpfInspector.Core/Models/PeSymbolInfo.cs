@@ -7,5 +7,6 @@ public sealed record PeSymbolInfo(
     Guid? Signature,
     int? Age,
     bool HasEmbeddedPortablePdb,
-    string SymbolState);
+    string SymbolState,
+    string? Architecture);
 
