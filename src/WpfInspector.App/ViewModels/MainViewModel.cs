@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Data;
+using WpfInspector.Core;
 using WpfInspector.Core.Models;
 using WpfInspector.Core.Services;
 
@@ -15,6 +16,7 @@ public sealed class MainViewModel : ObservableObject
     private bool _isBusy;
     private string _statusMessage = "準備完了";
     private string _processFilter = string.Empty;
+    private bool _showBackgroundProcesses;
     private string _pdbPath = string.Empty;
     private string _assemblyPath = string.Empty;
     private ProcessSummary? _selectedProcess;
@@ -67,9 +69,25 @@ public sealed class MainViewModel : ObservableObject
                 return;
             }
 
-            ProcessesView.Refresh();
+            RefreshProcessesView();
         }
     }
+
+    public bool ShowBackgroundProcesses
+    {
+        get => _showBackgroundProcesses;
+        set
+        {
+            if (!SetProperty(ref _showBackgroundProcesses, value))
+            {
+                return;
+            }
+
+            RefreshProcessesView();
+        }
+    }
+
+    public string ProcessCountSummary => $"{ProcessesView.Cast<object>().Count()} / {Processes.Count} 件表示";
 
     public string PdbPath
     {
@@ -371,7 +389,7 @@ public sealed class MainViewModel : ObservableObject
         {
             var processes = await Task.Run(_processInspectionService.GetProcesses);
             ReplaceCollection(Processes, processes);
-            ProcessesView.Refresh();
+            RefreshProcessesView();
 
             SelectedProcess = previousProcessId is null
                 ? GetDefaultSelectedProcess()
@@ -541,14 +559,7 @@ public sealed class MainViewModel : ObservableObject
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(ProcessFilter))
-        {
-            return true;
-        }
-
-        return process.ProcessName.Contains(ProcessFilter, StringComparison.OrdinalIgnoreCase)
-            || process.ProcessId.ToString().Contains(ProcessFilter, StringComparison.OrdinalIgnoreCase)
-            || process.WindowTitle.Contains(ProcessFilter, StringComparison.OrdinalIgnoreCase);
+        return ProcessListFiltering.Matches(process, ProcessFilter, ShowBackgroundProcesses);
     }
 
     private void RaiseProcessDetailsChanged()
@@ -566,6 +577,12 @@ public sealed class MainViewModel : ObservableObject
         InspectedWindows.Clear();
         SelectedInspectedWindow = null;
         ClearPdbAnalysis();
+    }
+
+    private void RefreshProcessesView()
+    {
+        ProcessesView.Refresh();
+        OnPropertyChanged(nameof(ProcessCountSummary));
     }
 
     private void RaisePdbDetailsChanged()

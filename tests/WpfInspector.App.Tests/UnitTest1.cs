@@ -1,5 +1,6 @@
 using WpfInspector.Core.Models;
 using WpfInspector.Core.Services;
+using WpfInspector.Core;
 
 namespace WpfInspector.App.Tests;
 
@@ -64,6 +65,52 @@ public sealed class UnitTest1
         var snapshot = service.InspectProcess(Environment.ProcessId);
 
         Assert.Contains(snapshot.Notes, note => note.StartsWith("アーキテクチャ:"));
+    }
+
+    [Fact]
+    public void ProcessListFiltering_hides_background_processes_by_default()
+    {
+        var backgroundProcess = new ProcessSummary(
+            ProcessId: 42,
+            ProcessName: "BackgroundWorker",
+            WindowTitle: string.Empty,
+            ExecutablePath: @"C:\apps\BackgroundWorker.exe",
+            IsResponding: true);
+
+        var visible = ProcessListFiltering.Matches(backgroundProcess, filterText: null, includeBackgroundProcesses: false);
+
+        Assert.False(visible);
+    }
+
+    [Fact]
+    public void ProcessListFiltering_keeps_current_process_visible_even_without_window_title()
+    {
+        var currentProcess = new ProcessSummary(
+            ProcessId: Environment.ProcessId,
+            ProcessName: "WpfInspector.App",
+            WindowTitle: string.Empty,
+            ExecutablePath: @"C:\apps\WpfInspector.App.exe",
+            IsResponding: true,
+            IsCurrentProcess: true);
+
+        var visible = ProcessListFiltering.Matches(currentProcess, filterText: null, includeBackgroundProcesses: false);
+
+        Assert.True(visible);
+    }
+
+    [Fact]
+    public void ProcessListFiltering_matches_executable_path_when_searching()
+    {
+        var process = new ProcessSummary(
+            ProcessId: 42,
+            ProcessName: "SampleApp",
+            WindowTitle: "Sample Window",
+            ExecutablePath: @"C:\tools\SampleApp.exe",
+            IsResponding: true);
+
+        var visible = ProcessListFiltering.Matches(process, "tools", includeBackgroundProcesses: true);
+
+        Assert.True(visible);
     }
 
     [Fact]
