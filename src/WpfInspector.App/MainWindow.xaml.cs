@@ -75,16 +75,6 @@ public partial class MainWindow : Window
         await ViewModel.AnalyzePdbAsync();
     }
 
-    private async void UseSelectedModulePdbButton_OnClick(object sender, RoutedEventArgs e)
-    {
-        if (!ViewModel.TryUseSelectedModulePdb())
-        {
-            return;
-        }
-
-        await ViewModel.AnalyzePdbAsync();
-    }
-
     private async void InjectButton_OnClick(object sender, RoutedEventArgs e)
     {
         await ViewModel.AnalyzeSelectedWpfAsync();

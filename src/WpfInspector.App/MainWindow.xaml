@@ -81,41 +81,6 @@
             </StatusBarItem>
         </StatusBar>
 
-        <GroupBox DockPanel.Dock="Top"
-                  Margin="0,0,0,10"
-                  Header="WpfInspector">
-            <Grid Margin="8">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="360" />
-                </Grid.ColumnDefinitions>
-
-                <StackPanel Grid.Column="0"
-                            Margin="0,0,12,0">
-                    <TextBlock FontSize="20"
-                               FontWeight="SemiBold"
-                               Text="WPF プロセスの UI と PDB を解析するデスクトップツール" />
-                    <TextBlock Margin="0,6,0,0"
-                               Style="{StaticResource MutedTextStyle}"
-                               Text="対象プロセスのモジュール情報、ランタイムのビジュアルツリー、Portable PDB の内容を 1 画面で確認できます。" />
-                </StackPanel>
-
-                <GroupBox Grid.Column="1"
-                          Header="現在の状態">
-                    <StackPanel Margin="8">
-                        <TextBlock FontWeight="SemiBold"
-                                   Text="{Binding ProcessCountSummary}" />
-                        <TextBlock Margin="0,6,0,0"
-                                   Text="{Binding WpfInspectionSummary}"
-                                   TextWrapping="Wrap" />
-                        <TextBlock Margin="0,6,0,0"
-                                   Style="{StaticResource MutedTextStyle}"
-                                   Text="{Binding RuntimeAssemblySummary}" />
-                    </StackPanel>
-                </GroupBox>
-            </Grid>
-        </GroupBox>
-
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="460" MinWidth="380" />
@@ -257,78 +222,7 @@
                           Background="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" />
 
             <Grid Grid.Column="2">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="0.42*" MinHeight="220" />
-                    <RowDefinition Height="6" />
-                    <RowDefinition Height="0.58*" MinHeight="320" />
-                </Grid.RowDefinitions>
-
-                <GroupBox Grid.Row="0"
-                          Style="{StaticResource SectionGroupBoxStyle}"
-                          Header="読み込みモジュール">
-                    <Grid Margin="8">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-
-                        <DataGrid Grid.Row="0"
-                                  x:Name="ModulesGrid"
-                                  AutoGenerateColumns="False"
-                                  ItemsSource="{Binding Modules}"
-                                  SelectedItem="{Binding SelectedModule}">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Module"
-                                                    Width="1.5*"
-                                                    Binding="{Binding ModuleName}" />
-                                <DataGridTextColumn Header="Base"
-                                                    Width="115"
-                                                    Binding="{Binding BaseAddress, StringFormat=0x{0:X}}" />
-                                <DataGridTextColumn Header="Size"
-                                                    Width="100"
-                                                    Binding="{Binding ModuleMemorySize, StringFormat={}{0:N0}}" />
-                                <DataGridTextColumn Header="Symbol"
-                                                    Width="140"
-                                                    Binding="{Binding SymbolInfo.SymbolState}" />
-                                <DataGridCheckBoxColumn Header="PDB"
-                                                        Width="72"
-                                                        Binding="{Binding SymbolInfo.SuggestedPdbExists}" />
-                                <DataGridTextColumn Header="Candidate Path"
-                                                    Width="3*"
-                                                    Binding="{Binding SymbolInfo.SuggestedPdbPath}" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-
-                        <DockPanel Grid.Row="1"
-                                   LastChildFill="True">
-                            <Button DockPanel.Dock="Right"
-                                    Width="180"
-                                    Margin="8,0,0,0"
-                                    Padding="12,4"
-                                    VerticalAlignment="Top"
-                                    IsEnabled="{Binding CanUseSelectedModulePdb}"
-                                    Click="UseSelectedModulePdbButton_OnClick"
-                                    Content="選択モジュールの PDB を使用" />
-                            <StackPanel>
-                                <TextBlock FontWeight="SemiBold"
-                                           Text="{Binding SelectedModuleSummary}" />
-                                <TextBlock x:Name="SelectedProcessPdbSummaryText"
-                                           Margin="0,4,0,0"
-                                           Text="{Binding SelectedProcessPdbSummary}"
-                                           TextWrapping="Wrap" />
-                            </StackPanel>
-                        </DockPanel>
-                    </Grid>
-                </GroupBox>
-
-                <GridSplitter Grid.Row="1"
-                              Height="6"
-                              HorizontalAlignment="Stretch"
-                              VerticalAlignment="Stretch"
-                              Background="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" />
-
-                <GroupBox Grid.Row="2"
-                          Header="解析">
+                <GroupBox Header="解析">
                     <Grid Margin="8">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />

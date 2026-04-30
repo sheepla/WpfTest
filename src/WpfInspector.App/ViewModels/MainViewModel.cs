@@ -21,7 +21,6 @@ public sealed class MainViewModel : ObservableObject
     private string _assemblyPath = string.Empty;
     private ProcessSummary? _selectedProcess;
     private ProcessInspectionSnapshot? _selectedProcessSnapshot;
-    private ProcessModuleInfo? _selectedModule;
     private PdbAnalysisResult? _pdbAnalysisResult;
     private WpfInspectionResult? _wpfInspectionResult;
     private WpfWindowInfo? _selectedInspectedWindow;
@@ -118,21 +117,6 @@ public sealed class MainViewModel : ObservableObject
             }
 
             RaiseProcessDetailsChanged();
-        }
-    }
-
-    public ProcessModuleInfo? SelectedModule
-    {
-        get => _selectedModule;
-        set
-        {
-            if (!SetProperty(ref _selectedModule, value))
-            {
-                return;
-            }
-
-            OnPropertyChanged(nameof(SelectedModuleSummary));
-            OnPropertyChanged(nameof(CanUseSelectedModulePdb));
         }
     }
 
@@ -356,14 +340,6 @@ public sealed class MainViewModel : ObservableObject
             ? "UI 未走査"
             : $"{WpfInspectionResult.Windows.Count} ウィンドウ / Dispatcher {WpfInspectionResult.DispatcherState}";
 
-    public string SelectedModuleSummary =>
-        SelectedModule is null
-            ? "モジュールを選択すると PDB 候補を利用できます。"
-            : $"{SelectedModule.ModuleName} | {SelectedModule.SymbolInfo?.SymbolState ?? "シンボル情報なし"}";
-
-    public bool CanUseSelectedModulePdb =>
-        SelectedModule?.SymbolInfo?.SuggestedPdbExists == true;
-
     public string PdbSummary
     {
         get
@@ -411,7 +387,6 @@ public sealed class MainViewModel : ObservableObject
             var snapshot = await Task.Run(() => _processInspectionService.InspectProcess(SelectedProcess.ProcessId));
             SelectedProcessSnapshot = snapshot;
             ReplaceCollection(Modules, snapshot.Modules);
-            SelectedModule = snapshot.ResolvePreferredInitialAnalysisModule() ?? snapshot.MainModule ?? Modules.FirstOrDefault();
             ApplySelectedProcessPdbCandidate(snapshot);
             StatusMessage = $"{snapshot.Summary.ProcessName} のモジュールを {snapshot.Modules.Count} 件読み込みました。";
         });
@@ -468,7 +443,6 @@ public sealed class MainViewModel : ObservableObject
             var analysisModule = snapshot.ResolvePreferredWpfAnalysisModule(inspectionResult);
             if (analysisModule is not null)
             {
-                SelectedModule = analysisModule;
                 AssemblyPath = analysisModule.ModulePath;
                 PdbPath = analysisModule.SymbolInfo?.SuggestedPdbPath ?? string.Empty;
             }
@@ -511,20 +485,6 @@ public sealed class MainViewModel : ObservableObject
                 ? $"UI 走査と PDB 解析が完了しました: ウィンドウ {inspectionResult.Windows.Count} 件 / 文書 {Documents.Count} 件"
                 : $"UI 走査は完了しましたが、PDB 解析は未完了です: {pdbFailure}";
         });
-    }
-
-    public bool TryUseSelectedModulePdb()
-    {
-        if (SelectedModule?.SymbolInfo?.SuggestedPdbExists != true || string.IsNullOrWhiteSpace(SelectedModule.SymbolInfo.SuggestedPdbPath))
-        {
-            StatusMessage = "選択モジュールに利用可能な PDB がありません。";
-            return false;
-        }
-
-        PdbPath = SelectedModule.SymbolInfo.SuggestedPdbPath;
-        AssemblyPath = SelectedModule.ModulePath;
-        StatusMessage = $"{SelectedModule.ModuleName} の PDB 候補を入力しました。";
-        return true;
     }
 
     private async Task RunBusyAsync(string statusMessage, Func<Task> action)
@@ -618,11 +578,6 @@ public sealed class MainViewModel : ObservableObject
         WpfInspectionResult = result;
         ReplaceCollection(InspectedWindows, result.Windows);
         SelectedInspectedWindow = InspectedWindows.FirstOrDefault();
-        var resolvedModule = GetResolvedAnalysisModule();
-        if (resolvedModule is not null)
-        {
-            SelectedModule = resolvedModule;
-        }
         OnPropertyChanged(nameof(SelectedProcessPdbSummary));
         OnPropertyChanged(nameof(RuntimeAssemblySummary));
         OnPropertyChanged(nameof(UiResultSummary));
