@@ -20,7 +20,7 @@ internal sealed class WpfPipeClient : IAsyncDisposable
 
     internal async Task InjectAndConnectAsync()
     {
-        var nativeDllPath = FindNativeBootstrap();
+        var nativeDllPath = InjectionAssets.FindNativeBootstrap(AppContext.BaseDirectory);
         var pipeName = $"wpfinspector-{_pid}";
 
         _pipe = new NamedPipeServerStream(
@@ -55,43 +55,6 @@ internal sealed class WpfPipeClient : IAsyncDisposable
 
         await _writer.WriteLineAsync(command);
         return await _reader.ReadLineAsync() ?? "ERROR:No response";
-    }
-
-    private static string FindNativeBootstrap()
-    {
-        // 同一ディレクトリに配置されている場合（リリースビルド想定）
-        var path = Path.Combine(AppContext.BaseDirectory, "WpfInspector.NativeBootstrap.dll");
-        if (File.Exists(path)) return path;
-
-        // 開発時: リポジトリ内の既知のビルド出力パスを検索
-        var repoRoot = FindRepoRoot(AppContext.BaseDirectory);
-        if (repoRoot is not null)
-        {
-            foreach (var config in new[] { "Debug", "Release" })
-            {
-                var candidate = Path.Combine(
-                    repoRoot, "src", "WpfInspector.NativeBootstrap", "x64", config,
-                    "WpfInspector.NativeBootstrap.dll");
-                if (File.Exists(candidate)) return candidate;
-            }
-        }
-
-        throw new FileNotFoundException(
-            "WpfInspector.NativeBootstrap.dll が見つかりません。" +
-            "msbuild で NativeBootstrap プロジェクトをビルドしてください。");
-    }
-
-    private static string? FindRepoRoot(string start)
-    {
-        var dir = start;
-        for (int i = 0; i < 8; i++)
-        {
-            if (File.Exists(Path.Combine(dir, "WpfInspector.sln"))) return dir;
-            var parent = Path.GetDirectoryName(dir);
-            if (parent is null) break;
-            dir = parent;
-        }
-        return null;
     }
 
     public async ValueTask DisposeAsync()

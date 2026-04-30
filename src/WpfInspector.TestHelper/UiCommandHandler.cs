@@ -38,16 +38,16 @@ internal static class UiCommandHandler
         {
             try
             {
-                await using var pipe = new NamedPipeServerStream(
+                // インスペクター側がサーバーを立てているので、クライアントとして接続する。
+                await using var pipe = new NamedPipeClientStream(
+                    ".",
                     pipeName,
                     PipeDirection.InOut,
-                    maxNumberOfServerInstances: 1,
-                    PipeTransmissionMode.Byte,
                     PipeOptions.Asynchronous);
 
                 using var cts = new CancellationTokenSource(30_000);
-                Log($"Waiting for client pipe='{pipeName}'");
-                await pipe.WaitForConnectionAsync(cts.Token);
+                Log($"Connecting to server pipe='{pipeName}'");
+                await pipe.ConnectAsync(cts.Token);
                 Log($"Connected pipe='{pipeName}'");
 
                 using var reader = new StreamReader(

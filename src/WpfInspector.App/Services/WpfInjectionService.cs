@@ -18,16 +18,6 @@ namespace WpfInspector.App.Services;
 public sealed class WpfInjectionService : IWpfInjectionService
 {
     private static readonly Lock LogSync = new();
-    private static readonly string[] ManagedPayloadFiles =
-    [
-        "WpfInspector.TestHelper.dll",
-        "WpfInspector.TestHelper.deps.json",
-        "WpfInspector.TestHelper.runtimeconfig.json",
-        "WpfInspector.InspectionPayload.dll",
-        "WpfInspector.InspectionPayload.deps.json",
-        "WpfInspector.InspectionPayload.runtimeconfig.json",
-        "WpfInspector.Core.dll"
-    ];
 
     private readonly string _baseDirectory;
     private readonly string _nativeDllPath;
@@ -58,7 +48,15 @@ public sealed class WpfInjectionService : IWpfInjectionService
         var pipeName = session.PipeName;
         Log($"InspectAsync start pid={processId} pipe={pipeName} dll={session.NativeBootstrapPath}");
 
-        // 注入実行
+        // WpfInspector 側がサーバーを先に立て、TestHelper がクライアントとして接続してくる
+        await using var pipe = new NamedPipeServerStream(
+            pipeName,
+            PipeDirection.InOut,
+            maxNumberOfServerInstances: 1,
+            PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous);
+
+        // 注入実行（サーバー作成後）
         try
         {
             ProcessInjector.Inject(processId, session.NativeBootstrapPath);
@@ -70,20 +68,13 @@ public sealed class WpfInjectionService : IWpfInjectionService
                 "対象プロセスの権限が WpfInspector より高いため DLL を注入できません。WpfInspector を対象と同等以上の権限で起動してください。",
                 exception);
         }
-        Log($"Injected pid={processId}; waiting for server pipe={pipeName}");
+        Log($"Injected pid={processId}; waiting for TestHelper to connect pipe={pipeName}");
 
-        // TestHelper 側がサーバーになり、WpfInspector はクライアントとして接続する
-        await using var pipe = new NamedPipeClientStream(
-            ".",
-            pipeName,
-            PipeDirection.InOut,
-            PipeOptions.Asynchronous);
-
-        // TestHelper が接続して "READY" を送ってくるまで待つ（最大 30 秒）
+        // TestHelper がクライアントとして接続してくるまで待つ（最大 30 秒）
         using var connectCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         try
         {
-            await pipe.ConnectAsync(connectCts.Token);
+            await pipe.WaitForConnectionAsync(connectCts.Token);
             Log($"Connected pipe={pipeName}");
         }
         catch (OperationCanceledException)
@@ -153,7 +144,7 @@ public sealed class WpfInjectionService : IWpfInjectionService
             $"WpfInspector.NativeBootstrap.{sessionId}.dll");
         File.Copy(_nativeDllPath, nativeBootstrapPath, overwrite: true);
 
-        foreach (var fileName in ManagedPayloadFiles)
+        foreach (var fileName in InjectionAssets.ManagedPayloadFiles)
         {
             var sourcePath = Path.Combine(_baseDirectory, fileName);
             if (!File.Exists(sourcePath))
