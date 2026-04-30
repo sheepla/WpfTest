@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
 using System.IO;
@@ -7,12 +9,12 @@ using WpfInspector.Core.Models;
 
 namespace WpfInspector.InspectionPayload;
 
-internal static class Inspector
+public static class Inspector
 {
-    private const int MaxDepth = 6;
+    private const int MaxDepth = 20;
     private const int MaxChildren = 40;
 
-    internal static string CollectJson(int processId)
+    public static string CollectJson(int processId)
     {
         var result = CollectResult(processId);
         return JsonSerializer.Serialize(result);
@@ -25,12 +27,16 @@ internal static class Inspector
         string wpfVersion = string.Empty;
         string dispatcher = string.Empty;
 
-        Application.Current.Dispatcher.Invoke(() =>
+        var app = Application.Current;
+        if (app is null)
+            throw new InvalidOperationException("Application.Current が null です。対象プロセスで WPF Application が起動していません。");
+
+        app.Dispatcher.Invoke(() =>
         {
             var collector = new RuntimeAssemblyCollector(AppDomain.CurrentDomain.BaseDirectory);
-            dispatcher = Application.Current.Dispatcher.Thread.ThreadState.ToString();
+            dispatcher = app.Dispatcher.Thread.ThreadState.ToString();
 
-            foreach (Window w in Application.Current.Windows)
+            foreach (Window w in app.Windows)
             {
                 collector.Record(w.GetType(), "Window");
                 windows.Add(new WpfWindowInfo(
@@ -45,7 +51,7 @@ internal static class Inspector
                 .FirstOrDefault(a => a.GetName().Name == "PresentationFramework");
             wpfVersion = pfAsm?.GetName().Version?.ToString() ?? "不明";
             runtimeAssemblies = collector.ToList();
-        }, DispatcherPriority.Background);
+        }, DispatcherPriority.Normal);
 
         return new WpfInspectionResult(
             ProcessId: processId,
@@ -63,8 +69,18 @@ internal static class Inspector
         var typeName = type.Name;
         var name = obj is FrameworkElement fe ? (fe.Name ?? string.Empty) : string.Empty;
         var isVisible = obj is UIElement ui && ui.IsVisible;
+        var isEnabled = obj is UIElement uiEnabled && uiEnabled.IsEnabled;
         var width = obj is FrameworkElement fw ? fw.ActualWidth : 0d;
         var height = obj is FrameworkElement fh ? fh.ActualHeight : 0d;
+
+        var automationId = obj is FrameworkElement
+            ? (AutomationProperties.GetAutomationId(obj) is { Length: > 0 } aid ? aid : null)
+            : null;
+
+        string? text = null;
+        if (obj is TextBlock tb) text = tb.Text;
+        else if (obj is TextBox tbx) text = tbx.Text;
+        else if (obj is ContentControl cc && cc.Content is string s) text = s;
 
         Type? dataContextType = null;
         if (obj is FrameworkElement frameworkElement && frameworkElement.DataContext is not null)
@@ -79,18 +95,31 @@ internal static class Inspector
             int count = VisualTreeHelper.GetChildrenCount(obj);
             for (int i = 0; i < Math.Min(count, MaxChildren); i++)
             {
-                children.Add(CollectElement(VisualTreeHelper.GetChild(obj, i), depth + 1, collector));
+                var child = VisualTreeHelper.GetChild(obj, i);
+                if (ShouldSkip(child)) continue;
+                children.Add(CollectElement(child, depth + 1, collector));
             }
         }
 
         return new WpfElementInfo(
             TypeName: typeName,
             Name: name,
+            AutomationId: automationId,
+            Text: text,
             DataContextTypeName: dataContextType?.Name,
             IsVisible: isVisible,
+            IsEnabled: isEnabled,
             Width: width,
             Height: height,
             Children: children);
+    }
+
+    private static bool ShouldSkip(DependencyObject obj)
+    {
+        if (obj is not UIElement ui) return false;
+        if (ui.IsVisible) return false;
+        if (obj is not FrameworkElement fe) return false;
+        return fe.ActualWidth == 0 && fe.ActualHeight == 0;
     }
 
     private sealed class RuntimeAssemblyCollector

@@ -7,60 +7,40 @@
         xmlns:converters="clr-namespace:WpfInspector.App.Converters"
         mc:Ignorable="d"
         Title="WpfInspector"
-        Height="920"
         Width="1480"
-        MinHeight="760"
+        Height="920"
         MinWidth="1220"
-        Background="#F2F5F7"
-        Loaded="OnLoaded">
+        MinHeight="760"
+        Loaded="OnLoaded"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
     <Window.Resources>
-        <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFBF8" />
-        <SolidColorBrush x:Key="PanelBrush" Color="#FFF7F4" />
-        <SolidColorBrush x:Key="LineBrush" Color="#FFD9E0E5" />
-        <SolidColorBrush x:Key="TextBrush" Color="#FF1E2934" />
-        <SolidColorBrush x:Key="MutedBrush" Color="#FF5C6E7E" />
-        <SolidColorBrush x:Key="AccentBrush" Color="#FF007A78" />
-        <SolidColorBrush x:Key="AccentSoftBrush" Color="#FFDDF4F1" />
-        <SolidColorBrush x:Key="HeroBrush" Color="#FF123848" />
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
         <converters:NullToCollapsedConverter x:Key="NullToCollapsedConverter" />
 
-        <Style x:Key="CardStyle" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+        <Style x:Key="SectionGroupBoxStyle" TargetType="GroupBox">
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
+
+        <Style x:Key="SummaryPanelStyle" TargetType="Border">
+            <Setter Property="Padding" Value="8" />
+            <Setter Property="Margin" Value="0,0,8,0" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="24" />
-            <Setter Property="Padding" Value="18" />
+            <Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}" />
+            <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}" />
         </Style>
 
-        <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-        </Style>
-
-        <Style TargetType="Button">
-            <Setter Property="Padding" Value="14,8" />
-            <Setter Property="Margin" Value="0" />
-            <Setter Property="Background" Value="{StaticResource AccentBrush}" />
-            <Setter Property="Foreground" Value="White" />
-            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-        </Style>
-
-        <Style TargetType="TextBox">
-            <Setter Property="Padding" Value="10,7" />
-            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Background" Value="White" />
+        <Style x:Key="MutedTextStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
 
         <Style TargetType="DataGrid">
-            <Setter Property="Background" Value="White" />
-            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
             <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}" />
             <Setter Property="GridLinesVisibility" Value="Horizontal" />
-            <Setter Property="RowBackground" Value="White" />
-            <Setter Property="AlternatingRowBackground" Value="#FFF9FBFC" />
             <Setter Property="HeadersVisibility" Value="Column" />
             <Setter Property="CanUserAddRows" Value="False" />
             <Setter Property="CanUserDeleteRows" Value="False" />
@@ -68,62 +48,85 @@
             <Setter Property="IsReadOnly" Value="True" />
             <Setter Property="SelectionMode" Value="Single" />
             <Setter Property="SelectionUnit" Value="FullRow" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="MinRowHeight" Value="26" />
+        </Style>
+
+        <Style TargetType="TreeView">
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}" />
+            <Setter Property="Padding" Value="4" />
         </Style>
     </Window.Resources>
 
-    <Grid Margin="18">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+    <DockPanel Margin="10">
+        <StatusBar DockPanel.Dock="Bottom">
+            <StatusBarItem>
+                <TextBlock x:Name="StatusMessageText"
+                           Text="{Binding StatusMessage}" />
+            </StatusBarItem>
+            <Separator />
+            <StatusBarItem HorizontalAlignment="Right">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Margin="0,0,8,0"
+                               VerticalAlignment="Center"
+                               Style="{StaticResource MutedTextStyle}"
+                               Text="処理中" />
+                    <ProgressBar Width="180"
+                                 Height="14"
+                                 VerticalAlignment="Center"
+                                 IsIndeterminate="True"
+                                 Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}" />
+                </StackPanel>
+            </StatusBarItem>
+        </StatusBar>
 
-        <Border Grid.Row="0"
-                Margin="0,0,0,18"
-                Padding="24"
-                CornerRadius="28"
-                Background="{StaticResource HeroBrush}">
-            <DockPanel LastChildFill="True">
-                <StackPanel>
-                    <TextBlock FontSize="30"
-                               FontWeight="Bold"
-                               Foreground="White"
-                               Text="WpfInspector" />
-                    <TextBlock Margin="0,8,0,0"
-                               FontSize="14"
-                               Foreground="#FFD4E7EE"
-                               Text="選択した WPF プロセス、または WpfInspector 自身を走査し、ランタイム情報を使って PDB と UI ツリーを解析するデスクトップツール" />
+        <GroupBox DockPanel.Dock="Top"
+                  Margin="0,0,0,10"
+                  Header="WpfInspector">
+            <Grid Margin="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="360" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0"
+                            Margin="0,0,12,0">
+                    <TextBlock FontSize="20"
+                               FontWeight="SemiBold"
+                               Text="WPF プロセスの UI と PDB を解析するデスクトップツール" />
+                    <TextBlock Margin="0,6,0,0"
+                               Style="{StaticResource MutedTextStyle}"
+                               Text="対象プロセスのモジュール情報、ランタイムのビジュアルツリー、Portable PDB の内容を 1 画面で確認できます。" />
                 </StackPanel>
 
-                <Border DockPanel.Dock="Right"
-                        Width="360"
-                        Padding="16"
-                        CornerRadius="20"
-                        Background="#1FFFFFFF">
-                    <StackPanel>
-                        <TextBlock FontSize="12"
-                                   FontWeight="SemiBold"
-                                   Foreground="#FFF4D06F"
-                                   Text="INSPECTION FLOW" />
+                <GroupBox Grid.Column="1"
+                          Header="現在の状態">
+                    <StackPanel Margin="8">
+                        <TextBlock FontWeight="SemiBold"
+                                   Text="{Binding ProcessCountSummary}" />
                         <TextBlock Margin="0,6,0,0"
-                                   TextWrapping="Wrap"
-                                   Foreground="White"
-                                   Text="プロセス一覧から WPF を選択すると、ランタイム UI 情報を取得し、その結果を使って解析対象 PDB を自動決定できます。WpfInspector 自身を選んだ場合は直接走査します。" />
+                                   Text="{Binding WpfInspectionSummary}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Margin="0,6,0,0"
+                                   Style="{StaticResource MutedTextStyle}"
+                                   Text="{Binding RuntimeAssemblySummary}" />
                     </StackPanel>
-                </Border>
-            </DockPanel>
-        </Border>
+                </GroupBox>
+            </Grid>
+        </GroupBox>
 
-        <Grid Grid.Row="1">
+        <Grid>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="0.93*" />
-                <ColumnDefinition Width="1.07*" />
+                <ColumnDefinition Width="460" MinWidth="380" />
+                <ColumnDefinition Width="6" />
+                <ColumnDefinition Width="*" MinWidth="620" />
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0"
-                    Margin="0,0,12,0"
-                    Style="{StaticResource CardStyle}">
-                <Grid>
+            <GroupBox Grid.Column="0"
+                      Style="{StaticResource SectionGroupBoxStyle}"
+                      Header="プロセス">
+                <Grid Margin="8">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -131,64 +134,51 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <StackPanel Grid.Row="0"
-                                Margin="0,0,0,14">
-                        <TextBlock FontSize="22"
-                                   FontWeight="SemiBold"
-                                   Text="Process Explorer" />
-                        <TextBlock Margin="0,6,0,0"
-                                   Foreground="{StaticResource MutedBrush}"
-                                   Text="実行中プロセスから対象 WPF を選択し、Self 列で WpfInspector 自身を見分けながら状態確認と解析対象の確定を行います。" />
-                    </StackPanel>
+                    <Grid Grid.Row="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <Label Grid.Column="0"
+                               Margin="0,0,8,0"
+                               VerticalAlignment="Center"
+                               Content="フィルター" />
+                        <TextBox Grid.Column="1"
+                                 x:Name="ProcessFilterTextBox"
+                                 Margin="0,0,8,0"
+                                 VerticalContentAlignment="Center"
+                                 Text="{Binding ProcessFilter, UpdateSourceTrigger=PropertyChanged}" />
+                        <Button Grid.Column="2"
+                                x:Name="RefreshButton"
+                                MinWidth="96"
+                                Padding="12,4"
+                                Click="RefreshButton_OnClick"
+                                Content="更新" />
+                    </Grid>
 
                     <Grid Grid.Row="1"
-                          Margin="0,0,0,14">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
+                          Margin="0,8,0,8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
-                        <TextBox Grid.Row="0"
-                                 Grid.Column="0"
-                                 x:Name="ProcessFilterTextBox"
-                                 Margin="0,0,12,0"
-                                 VerticalContentAlignment="Center"
-                                 Text="{Binding ProcessFilter, UpdateSourceTrigger=PropertyChanged}" />
-
-                        <Button Grid.Row="0"
-                                Grid.Column="1"
-                                x:Name="RefreshButton"
-                                Width="112"
-                                Click="RefreshButton_OnClick"
-                                Content="Refresh" />
-
-                        <Grid Grid.Row="1"
-                              Grid.ColumnSpan="2"
-                              Margin="0,10,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-
-                            <CheckBox Grid.Column="0"
-                                      x:Name="ShowBackgroundProcessesCheckBox"
-                                      VerticalAlignment="Center"
-                                      Content="バックグラウンドも表示"
-                                      IsChecked="{Binding ShowBackgroundProcesses}" />
-
-                            <TextBlock Grid.Column="1"
-                                       VerticalAlignment="Center"
-                                       Foreground="{StaticResource MutedBrush}"
-                                       Text="{Binding ProcessCountSummary}" />
-                        </Grid>
+                        <CheckBox Grid.Column="0"
+                                  x:Name="ShowBackgroundProcessesCheckBox"
+                                  VerticalAlignment="Center"
+                                  Content="バックグラウンド プロセスも表示"
+                                  IsChecked="{Binding ShowBackgroundProcesses}" />
+                        <TextBlock Grid.Column="1"
+                                   VerticalAlignment="Center"
+                                   Style="{StaticResource MutedTextStyle}"
+                                   Text="{Binding ProcessCountSummary}" />
                     </Grid>
 
-                    <DataGrid x:Name="ProcessesGrid"
-                              Grid.Row="2"
+                    <DataGrid Grid.Row="2"
+                              x:Name="ProcessesGrid"
+                              AutoGenerateColumns="False"
                               ItemsSource="{Binding ProcessesView}"
                               SelectedItem="{Binding SelectedProcess}"
                               SelectionChanged="ProcessesGrid_OnSelectionChanged">
@@ -211,90 +201,80 @@
                         </DataGrid.Columns>
                     </DataGrid>
 
-                    <Border Grid.Row="3"
-                            Margin="0,14,0,0"
-                            Padding="16"
-                            CornerRadius="18"
-                            Background="{StaticResource PanelBrush}"
-                            BorderBrush="{StaticResource LineBrush}"
-                            BorderThickness="1">
-                        <StackPanel>
-                            <DockPanel>
-                                <StackPanel DockPanel.Dock="Right"
-                                            Orientation="Horizontal">
-                                    <Border Margin="0,0,8,0"
-                                            Padding="10,4"
-                                            CornerRadius="10"
-                                            Background="#FFE7EEF7"
-                                            Visibility="{Binding SelectedProcessSnapshot.Summary.IsCurrentProcess, Converter={StaticResource BoolToVisibilityConverter}}"
-                                            VerticalAlignment="Center">
-                                        <TextBlock FontSize="12"
-                                                   FontWeight="Bold"
-                                                   Foreground="#FF365B7D"
-                                                   Text="SELF" />
-                                    </Border>
-                                    <Border Padding="10,4"
-                                            CornerRadius="10"
-                                            Background="{StaticResource AccentSoftBrush}"
-                                            Visibility="{Binding IsWpfProcess, Converter={StaticResource BoolToVisibilityConverter}}"
-                                            VerticalAlignment="Center">
-                                        <TextBlock FontSize="12"
-                                                   FontWeight="Bold"
-                                                   Foreground="{StaticResource AccentBrush}"
-                                                   Text="WPF" />
-                                    </Border>
-                                </StackPanel>
-                                <TextBlock FontSize="18"
-                                           FontWeight="SemiBold"
-                                           x:Name="SelectedProcessHeadlineText"
-                                           Text="{Binding SelectedProcessHeadline}"
-                                           VerticalAlignment="Center" />
-                            </DockPanel>
-                            <TextBlock Margin="0,8,0,0"
-                                       Foreground="{StaticResource MutedBrush}"
-                                       Text="{Binding SelectedProcessPath}"
+                    <GroupBox Grid.Row="3"
+                              Header="選択中プロセス">
+                        <Grid Margin="8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0"
+                                       x:Name="SelectedProcessHeadlineText"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Text="{Binding SelectedProcessHeadline}"
                                        TextWrapping="Wrap" />
-                            <TextBlock Margin="0,8,0,0"
+
+                            <StackPanel Grid.Row="1"
+                                        Margin="0,6,0,0"
+                                        Orientation="Horizontal">
+                                <TextBlock Visibility="{Binding SelectedProcessSnapshot.Summary.IsCurrentProcess, Converter={StaticResource BoolToVisibilityConverter}}"
+                                           Text="WpfInspector 自身"
+                                           FontWeight="SemiBold"
+                                           Foreground="DarkBlue" />
+                                <TextBlock Margin="12,0,0,0"
+                                           Visibility="{Binding IsWpfProcess, Converter={StaticResource BoolToVisibilityConverter}}"
+                                           Text="WPF 検出"
+                                           FontWeight="SemiBold"
+                                           Foreground="DarkGreen" />
+                            </StackPanel>
+
+                            <TextBlock Grid.Row="2"
+                                       Margin="0,6,0,0"
+                                       Style="{StaticResource MutedTextStyle}"
+                                       Text="{Binding SelectedProcessPath}" />
+                            <TextBlock Grid.Row="3"
+                                       Margin="0,6,0,0"
                                        Text="{Binding SelectedProcessMetrics}"
                                        TextWrapping="Wrap" />
-                            <TextBlock Margin="0,10,0,0"
-                                       Foreground="{StaticResource MutedBrush}"
-                                       Text="{Binding SelectedProcessNotes}"
-                                       TextWrapping="Wrap" />
-                        </StackPanel>
-                    </Border>
+                            <TextBlock Grid.Row="4"
+                                       Margin="0,6,0,0"
+                                       Style="{StaticResource MutedTextStyle}"
+                                       Text="{Binding SelectedProcessNotes}" />
+                        </Grid>
+                    </GroupBox>
                 </Grid>
-            </Border>
+            </GroupBox>
 
-            <Grid Grid.Column="1"
-                  Margin="12,0,0,0">
+            <GridSplitter Grid.Column="1"
+                          Width="6"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch"
+                          Background="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" />
+
+            <Grid Grid.Column="2">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="0.74*" />
-                    <RowDefinition Height="1.26*" />
+                    <RowDefinition Height="0.42*" MinHeight="220" />
+                    <RowDefinition Height="6" />
+                    <RowDefinition Height="0.58*" MinHeight="320" />
                 </Grid.RowDefinitions>
 
-                <Border Grid.Row="0"
-                        Margin="0,0,0,12"
-                        Style="{StaticResource CardStyle}">
-                    <Grid>
+                <GroupBox Grid.Row="0"
+                          Style="{StaticResource SectionGroupBoxStyle}"
+                          Header="読み込みモジュール">
+                    <Grid Margin="8">
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <StackPanel Grid.Row="0"
-                                    Margin="0,0,0,14">
-                            <TextBlock FontSize="22"
-                                       FontWeight="SemiBold"
-                                       Text="Loaded Modules" />
-                            <TextBlock Margin="0,6,0,0"
-                                       Foreground="{StaticResource MutedBrush}"
-                                       Text="CodeView 情報を読み取り、選択した WPF のメインモジュールと関連 PDB 候補を確認します。自己プロセスでも同じ基準で候補を表示します。" />
-                        </StackPanel>
-
-                        <DataGrid x:Name="ModulesGrid"
-                                  Grid.Row="1"
+                        <DataGrid Grid.Row="0"
+                                  x:Name="ModulesGrid"
+                                  AutoGenerateColumns="False"
                                   ItemsSource="{Binding Modules}"
                                   SelectedItem="{Binding SelectedModule}">
                             <DataGrid.Columns>
@@ -319,371 +299,241 @@
                             </DataGrid.Columns>
                         </DataGrid>
 
-                        <Border Grid.Row="2"
-                                Margin="0,14,0,0"
-                                Padding="14"
-                                CornerRadius="18"
-                                Background="{StaticResource AccentSoftBrush}">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0"
-                                            Margin="0,0,12,0">
-                                    <TextBlock FontWeight="SemiBold"
-                                               Text="{Binding SelectedModuleSummary}" />
-                                    <TextBlock Margin="0,6,0,0"
-                                               x:Name="SelectedProcessPdbSummaryText"
-                                               Foreground="{StaticResource MutedBrush}"
-                                               Text="{Binding SelectedProcessPdbSummary}"
-                                               TextWrapping="Wrap" />
-                                </StackPanel>
-                                <Button Grid.Column="1"
-                                        Width="196"
-                                        VerticalAlignment="Center"
-                                        IsEnabled="{Binding CanUseSelectedModulePdb}"
-                                        Click="UseSelectedModulePdbButton_OnClick"
-                                        Content="選択モジュールのPDBを使う" />
-                            </Grid>
-                        </Border>
+                        <DockPanel Grid.Row="1"
+                                   LastChildFill="True">
+                            <Button DockPanel.Dock="Right"
+                                    Width="180"
+                                    Margin="8,0,0,0"
+                                    Padding="12,4"
+                                    VerticalAlignment="Top"
+                                    IsEnabled="{Binding CanUseSelectedModulePdb}"
+                                    Click="UseSelectedModulePdbButton_OnClick"
+                                    Content="選択モジュールの PDB を使用" />
+                            <StackPanel>
+                                <TextBlock FontWeight="SemiBold"
+                                           Text="{Binding SelectedModuleSummary}" />
+                                <TextBlock x:Name="SelectedProcessPdbSummaryText"
+                                           Margin="0,4,0,0"
+                                           Text="{Binding SelectedProcessPdbSummary}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </DockPanel>
                     </Grid>
-                </Border>
+                </GroupBox>
 
-                <Border Grid.Row="1"
-                        Margin="0,12,0,0"
-                        Style="{StaticResource CardStyle}">
-                    <Grid>
+                <GridSplitter Grid.Row="1"
+                              Height="6"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Stretch"
+                              Background="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" />
+
+                <GroupBox Grid.Row="2"
+                          Header="解析">
+                    <Grid Margin="8">
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
-                        <StackPanel Grid.Row="0"
-                                    Margin="0,0,0,14">
-                            <TextBlock FontSize="22"
-                                       FontWeight="SemiBold"
-                                       Text="Analysis Console" />
-                            <TextBlock Margin="0,6,0,0"
-                                       Foreground="{StaticResource MutedBrush}"
-                                       Text="選択した WPF プロセスを対象に、UI 走査で収集したランタイム情報と PDB 解析結果を一画面で確認します。WpfInspector 自身を選んだ場合も同じ画面で検証できます。" />
-                        </StackPanel>
+                        <DockPanel Grid.Row="0"
+                                   LastChildFill="True">
+                            <Button DockPanel.Dock="Right"
+                                    x:Name="AnalyzeSelectedWpfButton"
+                                    Width="180"
+                                    Padding="12,4"
+                                    Margin="12,0,0,0"
+                                    VerticalAlignment="Top"
+                                    IsEnabled="{Binding CanAnalyzeSelectedWpf}"
+                                    Click="InjectButton_OnClick"
+                                    Content="PDB 解析と UI 走査" />
+                            <StackPanel>
+                                <TextBlock FontWeight="SemiBold"
+                                           Text="{Binding WpfInspectionSummary}"
+                                           TextWrapping="Wrap" />
+                                <TextBlock Margin="0,4,0,0"
+                                           Style="{StaticResource MutedTextStyle}"
+                                           Text="外部プロセスではインジェクション、WpfInspector 自身ではアプリ内走査を実行します。" />
+                            </StackPanel>
+                        </DockPanel>
 
-                        <Grid Grid.Row="1"
-                              Margin="0,0,0,14">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-
-                            <Border Grid.Column="0"
-                                    Margin="0,0,8,0"
-                                    Padding="14"
-                                    CornerRadius="18"
-                                    Background="{StaticResource PanelBrush}"
-                                    BorderBrush="{StaticResource LineBrush}"
-                                    BorderThickness="1">
+                        <UniformGrid Grid.Row="1"
+                                     Margin="0,10,0,10"
+                                     Columns="3">
+                            <Border Style="{StaticResource SummaryPanelStyle}">
                                 <StackPanel>
-                                    <TextBlock FontSize="11"
-                                               FontWeight="Bold"
-                                               Foreground="{StaticResource AccentBrush}"
-                                               Text="STEP 1" />
-                                    <TextBlock Margin="0,8,0,0"
-                                               FontSize="16"
-                                               FontWeight="SemiBold"
-                                               Text="Target WPF" />
-                                    <TextBlock Margin="0,8,0,0"
-                                               FontWeight="SemiBold"
+                                    <TextBlock FontWeight="SemiBold"
+                                               Text="対象プロセス" />
+                                    <TextBlock Margin="0,4,0,0"
                                                Text="{Binding SelectedProcessHeadline}"
                                                TextWrapping="Wrap" />
-                                    <TextBlock Margin="0,6,0,0"
-                                               Foreground="{StaticResource MutedBrush}"
-                                               Text="{Binding SelectedProcessPdbSummary}"
-                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,4,0,0"
+                                               Style="{StaticResource MutedTextStyle}"
+                                               Text="{Binding SelectedProcessPdbSummary}" />
                                 </StackPanel>
                             </Border>
 
-                            <Border Grid.Column="1"
-                                    Margin="8,0"
-                                    Padding="14"
-                                    CornerRadius="18"
-                                    Background="{StaticResource AccentSoftBrush}"
-                                    BorderBrush="{StaticResource LineBrush}"
-                                    BorderThickness="1">
+                            <Border Style="{StaticResource SummaryPanelStyle}">
                                 <StackPanel>
-                                    <TextBlock FontSize="11"
-                                               FontWeight="Bold"
-                                               Foreground="{StaticResource AccentBrush}"
-                                               Text="STEP 2" />
-                                    <TextBlock Margin="0,8,0,0"
-                                               FontSize="16"
-                                               FontWeight="SemiBold"
-                                               Text="Runtime Scan" />
-                                    <TextBlock Margin="0,8,0,0"
-                                               FontWeight="SemiBold"
+                                    <TextBlock FontWeight="SemiBold"
+                                               Text="UI 走査" />
+                                    <TextBlock Margin="0,4,0,0"
                                                Text="{Binding UiResultSummary}"
                                                TextWrapping="Wrap" />
-                                    <TextBlock Margin="0,6,0,0"
-                                               Foreground="{StaticResource MutedBrush}"
-                                               Text="{Binding RuntimeAssemblySummary}"
-                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,4,0,0"
+                                               Style="{StaticResource MutedTextStyle}"
+                                               Text="{Binding RuntimeAssemblySummary}" />
                                 </StackPanel>
                             </Border>
 
-                            <Border Grid.Column="2"
-                                    Margin="8,0,0,0"
-                                    Padding="14"
-                                    CornerRadius="18"
-                                    Background="White"
-                                    BorderBrush="{StaticResource LineBrush}"
-                                    BorderThickness="1">
+                            <Border Margin="0"
+                                    Padding="8"
+                                    BorderThickness="1"
+                                    BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
+                                    Background="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}">
                                 <StackPanel>
-                                    <TextBlock FontSize="11"
-                                               FontWeight="Bold"
-                                               Foreground="{StaticResource AccentBrush}"
-                                               Text="STEP 3" />
-                                    <TextBlock Margin="0,8,0,0"
-                                               FontSize="16"
-                                               FontWeight="SemiBold"
-                                               Text="Portable PDB" />
-                                    <TextBlock Margin="0,8,0,0"
-                                               FontWeight="SemiBold"
+                                    <TextBlock FontWeight="SemiBold"
+                                               Text="PDB 解析" />
+                                    <TextBlock Margin="0,4,0,0"
                                                Text="{Binding PdbResultSummary}"
                                                TextWrapping="Wrap" />
-                                    <TextBlock Margin="0,6,0,0"
-                                               Foreground="{StaticResource MutedBrush}"
-                                               Text="{Binding SelectedProcessPdbSummary}"
-                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,4,0,0"
+                                               Style="{StaticResource MutedTextStyle}"
+                                               Text="{Binding PdbSummary}" />
                                 </StackPanel>
                             </Border>
-                        </Grid>
+                        </UniformGrid>
 
-                        <Border Grid.Row="2"
-                                Padding="14"
-                                CornerRadius="18"
-                                Background="{StaticResource PanelBrush}"
-                                BorderBrush="{StaticResource LineBrush}"
-                                BorderThickness="1">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0"
-                                            Margin="0,0,14,0">
-                                    <TextBlock FontWeight="SemiBold"
-                                               Text="{Binding WpfInspectionSummary}"
-                                               TextWrapping="Wrap" />
-                                    <TextBlock Margin="0,6,0,0"
-                                               Foreground="{StaticResource MutedBrush}"
-                                               Text="一括実行では、先にランタイム走査を実行します。外部プロセスでは検査ペイロードを注入し、WpfInspector 自身を選んだ場合はアプリ内で直接 UI ツリーを収集します。"
-                                               TextWrapping="Wrap" />
-                                </StackPanel>
-                                <Button Grid.Column="1"
-                                        x:Name="AnalyzeSelectedWpfButton"
-                                        Width="176"
-                                        VerticalAlignment="Center"
-                                        IsEnabled="{Binding CanAnalyzeSelectedWpf}"
-                                        Click="InjectButton_OnClick"
-                                        Content="PDB解析とUI走査" />
-                            </Grid>
-                        </Border>
-
-                        <Grid Grid.Row="3"
-                              Margin="0,14,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="0.92*" />
-                                <ColumnDefinition Width="1.08*" />
-                            </Grid.ColumnDefinitions>
-
-                            <Border Grid.Column="0"
-                                    Margin="0,0,12,0"
-                                    Padding="16"
-                                    CornerRadius="20"
-                                    Background="White"
-                                    BorderBrush="{StaticResource LineBrush}"
-                                    BorderThickness="1">
-                                <Grid>
+                        <TabControl Grid.Row="2">
+                            <TabItem Header="UI ツリー">
+                                <Grid Margin="8">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="*" />
                                     </Grid.RowDefinitions>
 
-                                    <StackPanel Grid.Row="0">
-                                        <TextBlock FontSize="18"
-                                                   FontWeight="SemiBold"
-                                                   Text="Visual Tree" />
-                                        <TextBlock Margin="0,6,0,0"
-                                                   Foreground="{StaticResource MutedBrush}"
-                                                   Text="検出したウィンドウを選択すると、ルート要素からビジュアルツリーを展開します。" />
-                                    </StackPanel>
+                                    <Grid Grid.Row="0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
 
-                                    <Grid Grid.Row="1"
-                                          Margin="0,14,0,14">
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="Auto" />
-                                        </Grid.RowDefinitions>
-                                        <Grid Grid.Row="0">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0"
-                                                       Margin="0,0,10,0"
-                                                       VerticalAlignment="Center"
-                                                       FontWeight="SemiBold"
-                                                       Text="ウィンドウ" />
-                                            <ComboBox Grid.Column="1"
-                                                      IsEnabled="{Binding HasInspectionResult}"
-                                                      ItemsSource="{Binding InspectedWindows}"
-                                                      SelectedItem="{Binding SelectedInspectedWindow}"
-                                                      DisplayMemberPath="Title" />
-                                        </Grid>
-                                        <TextBlock Grid.Row="1"
-                                                   Margin="0,10,0,0"
-                                                   Foreground="{StaticResource MutedBrush}"
-                                                   Text="{Binding SelectedInspectedWindowSummary}"
-                                                   TextWrapping="Wrap" />
+                                        <Label Grid.Column="0"
+                                               Margin="0,0,8,0"
+                                               VerticalAlignment="Center"
+                                               Content="ウィンドウ" />
+                                        <ComboBox Grid.Column="1"
+                                                  IsEnabled="{Binding HasInspectionResult}"
+                                                  ItemsSource="{Binding InspectedWindows}"
+                                                  SelectedItem="{Binding SelectedInspectedWindow}"
+                                                  DisplayMemberPath="Title" />
                                     </Grid>
 
-                                    <Border Grid.Row="2"
-                                            BorderBrush="{StaticResource LineBrush}"
-                                            BorderThickness="1"
-                                            CornerRadius="12">
-                                        <TreeView ItemsSource="{Binding SelectedInspectedWindowRoots}"
-                                                  Background="White">
-                                            <TreeView.Resources>
-                                                <HierarchicalDataTemplate DataType="{x:Type models:WpfElementInfo}"
-                                                                          ItemsSource="{Binding Children}">
-                                                    <StackPanel Orientation="Horizontal"
-                                                                Margin="2,1">
-                                                        <TextBlock FontWeight="SemiBold"
-                                                                   Text="{Binding TypeName}"
-                                                                   Foreground="{StaticResource AccentBrush}" />
-                                                        <TextBlock Margin="6,0,0,0"
-                                                                   Text="{Binding Name}"
-                                                                   Foreground="{StaticResource MutedBrush}" />
-                                                        <TextBlock Margin="6,0,0,0"
-                                                                   FontSize="11"
-                                                                   Foreground="{StaticResource MutedBrush}"
-                                                                   Visibility="{Binding DataContextTypeName, Converter={StaticResource NullToCollapsedConverter}}"
-                                                                   Text="{Binding DataContextTypeName, StringFormat=({0})}" />
-                                                    </StackPanel>
-                                                </HierarchicalDataTemplate>
-                                            </TreeView.Resources>
-                                        </TreeView>
-                                    </Border>
+                                    <TextBlock Grid.Row="1"
+                                               Margin="0,8,0,8"
+                                               Style="{StaticResource MutedTextStyle}"
+                                               Text="{Binding SelectedInspectedWindowSummary}" />
+
+                                    <TreeView Grid.Row="2"
+                                              ItemsSource="{Binding SelectedInspectedWindowRoots}">
+                                        <TreeView.Resources>
+                                            <HierarchicalDataTemplate DataType="{x:Type models:WpfElementInfo}"
+                                                                      ItemsSource="{Binding Children}">
+                                                <StackPanel Orientation="Horizontal"
+                                                            Margin="2,1">
+                                                    <TextBlock FontWeight="SemiBold"
+                                                               Text="{Binding TypeName}" />
+                                                    <TextBlock Margin="6,0,0,0"
+                                                               Text="{Binding Name}" />
+                                                    <TextBlock Margin="6,0,0,0"
+                                                               Visibility="{Binding DataContextTypeName, Converter={StaticResource NullToCollapsedConverter}}"
+                                                               Text="{Binding DataContextTypeName, StringFormat=DataContext: {0}}"
+                                                               Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+                                                </StackPanel>
+                                            </HierarchicalDataTemplate>
+                                        </TreeView.Resources>
+                                    </TreeView>
                                 </Grid>
-                            </Border>
+                            </TabItem>
 
-                            <Border Grid.Column="1"
-                                    Margin="12,0,0,0"
-                                    Padding="16"
-                                    CornerRadius="20"
-                                    Background="White"
-                                    BorderBrush="{StaticResource LineBrush}"
-                                    BorderThickness="1">
-                                <Grid>
+                            <TabItem Header="PDB 解析">
+                                <Grid Margin="8">
                                     <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="*" />
                                     </Grid.RowDefinitions>
 
-                                    <StackPanel Grid.Row="0">
-                                        <TextBlock FontSize="18"
-                                                   FontWeight="SemiBold"
-                                                   Text="PDB Details" />
-                                        <TextBlock Margin="0,6,0,0"
-                                                   Foreground="{StaticResource MutedBrush}"
-                                                   Text="走査後に解決した対象 PDB が自動入力されます。必要に応じて別パスへ切り替えて確認できます。" />
-                                    </StackPanel>
-
-                                    <Grid Grid.Row="1"
-                                          Margin="0,14,0,10">
+                                    <Grid Grid.Row="0">
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto" />
                                             <RowDefinition Height="Auto" />
                                         </Grid.RowDefinitions>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
 
-                                        <Grid Grid.Row="0"
-                                              Margin="0,0,0,10">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
+                                        <Label Grid.Row="0"
+                                               Grid.Column="0"
+                                               Margin="0,0,8,8"
+                                               VerticalAlignment="Center"
+                                               Content="PDB" />
+                                        <TextBox Grid.Row="0"
+                                                 Grid.Column="1"
+                                                 Margin="0,0,8,8"
+                                                 Text="{Binding PdbPath, UpdateSourceTrigger=PropertyChanged}" />
+                                        <Button Grid.Row="0"
+                                                Grid.Column="2"
+                                                MinWidth="92"
+                                                Padding="12,4"
+                                                Margin="0,0,0,8"
+                                                Click="BrowsePdbButton_OnClick"
+                                                Content="参照" />
 
-                                            <TextBlock Grid.Column="0"
-                                                       Margin="0,0,12,0"
-                                                       VerticalAlignment="Center"
-                                                       FontWeight="SemiBold"
-                                                       Text="PDB" />
-                                            <TextBox Grid.Column="1"
-                                                     Margin="0,0,12,0"
-                                                     Text="{Binding PdbPath, UpdateSourceTrigger=PropertyChanged}" />
-                                            <Button Grid.Column="2"
-                                                    Width="92"
-                                                    Click="BrowsePdbButton_OnClick"
-                                                    Content="Browse" />
-                                        </Grid>
-
-                                        <Grid Grid.Row="1">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-
-                                            <TextBlock Grid.Column="0"
-                                                       Margin="0,0,12,0"
-                                                       VerticalAlignment="Center"
-                                                       FontWeight="SemiBold"
-                                                       Text="Assembly" />
-                                            <TextBox Grid.Column="1"
-                                                     Margin="0,0,12,0"
-                                                     Text="{Binding AssemblyPath, UpdateSourceTrigger=PropertyChanged}" />
-                                            <Button Grid.Column="2"
-                                                    Width="92"
-                                                    Click="BrowseAssemblyButton_OnClick"
-                                                    Content="Browse" />
-                                        </Grid>
+                                        <Label Grid.Row="1"
+                                               Grid.Column="0"
+                                               Margin="0,0,8,0"
+                                               VerticalAlignment="Center"
+                                               Content="Assembly" />
+                                        <TextBox Grid.Row="1"
+                                                 Grid.Column="1"
+                                                 Margin="0,0,8,0"
+                                                 Text="{Binding AssemblyPath, UpdateSourceTrigger=PropertyChanged}" />
+                                        <Button Grid.Row="1"
+                                                Grid.Column="2"
+                                                MinWidth="92"
+                                                Padding="12,4"
+                                                Click="BrowseAssemblyButton_OnClick"
+                                                Content="参照" />
                                     </Grid>
 
-                                    <Border Grid.Row="2"
-                                            Padding="14"
-                                            CornerRadius="18"
-                                            Background="{StaticResource PanelBrush}"
-                                            BorderBrush="{StaticResource LineBrush}"
-                                            BorderThickness="1">
-                                        <DockPanel>
-                                            <StackPanel>
-                                                <TextBlock FontWeight="SemiBold"
-                                                           Text="{Binding PdbSummary}" />
-                                                <TextBlock Margin="0,6,0,0"
-                                                           Foreground="{StaticResource MutedBrush}"
-                                                           Text="{Binding PdbWarningsText}"
-                                                           TextWrapping="Wrap" />
-                                            </StackPanel>
-                                            <Button DockPanel.Dock="Right"
-                                                    Width="120"
-                                                    Click="AnalyzePdbButton_OnClick"
-                                                    Content="Analyze" />
-                                        </DockPanel>
-                                    </Border>
+                                    <DockPanel Grid.Row="1"
+                                               Margin="0,10,0,10"
+                                               LastChildFill="True">
+                                        <Button DockPanel.Dock="Right"
+                                                Width="120"
+                                                Padding="12,4"
+                                                Margin="12,0,0,0"
+                                                VerticalAlignment="Top"
+                                                Click="AnalyzePdbButton_OnClick"
+                                                Content="PDB を解析" />
+                                        <StackPanel>
+                                            <TextBlock FontWeight="SemiBold"
+                                                       Text="{Binding PdbSummary}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,4,0,0"
+                                                       Style="{StaticResource MutedTextStyle}"
+                                                       Text="{Binding PdbWarningsText}" />
+                                        </StackPanel>
+                                    </DockPanel>
 
-                                    <TabControl Grid.Row="3"
-                                                Margin="0,14,0,0"
-                                                Background="Transparent"
-                                                BorderThickness="0">
+                                    <TabControl Grid.Row="2">
                                         <TabItem Header="Documents">
-                                            <DataGrid ItemsSource="{Binding Documents}">
+                                            <DataGrid AutoGenerateColumns="False"
+                                                      ItemsSource="{Binding Documents}">
                                                 <DataGrid.Columns>
                                                     <DataGridTextColumn Header="Document"
                                                                         Width="3*"
@@ -700,8 +550,10 @@
                                                 </DataGrid.Columns>
                                             </DataGrid>
                                         </TabItem>
+
                                         <TabItem Header="Methods">
-                                            <DataGrid ItemsSource="{Binding Methods}">
+                                            <DataGrid AutoGenerateColumns="False"
+                                                      ItemsSource="{Binding Methods}">
                                                 <DataGrid.Columns>
                                                     <DataGridTextColumn Header="Token"
                                                                         Width="120"
@@ -723,33 +575,11 @@
                                         </TabItem>
                                     </TabControl>
                                 </Grid>
-                            </Border>
-                        </Grid>
+                            </TabItem>
+                        </TabControl>
                     </Grid>
-                </Border>
+                </GroupBox>
             </Grid>
         </Grid>
-
-        <Border Grid.Row="2"
-                Margin="0,18,0,0"
-                Padding="14"
-                CornerRadius="18"
-                Background="White"
-                BorderBrush="{StaticResource LineBrush}"
-                BorderThickness="1">
-            <DockPanel>
-                <ProgressBar DockPanel.Dock="Right"
-                             Width="180"
-                             Height="8"
-                             Margin="16,0,0,0"
-                             VerticalAlignment="Center"
-                             IsIndeterminate="True"
-                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}" />
-                <TextBlock VerticalAlignment="Center"
-                           x:Name="StatusMessageText"
-                           Foreground="{StaticResource MutedBrush}"
-                           Text="{Binding StatusMessage}" />
-            </DockPanel>
-        </Border>
-    </Grid>
+    </DockPanel>
 </Window>
