@@ -10,4 +10,7 @@
     <SelfContained>false</SelfContained>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WpfInspector.InspectionPayload\WpfInspector.InspectionPayload.csproj" />
+  </ItemGroup>
 </Project>

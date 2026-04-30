@@ -8,6 +8,7 @@
 #include <windows.h>
 #include <strsafe.h>
 #include <stdio.h>
+#include <string.h>
 
 /* ---- hostfxr 戻り値定数 -------------------------------------------------- */
 
@@ -94,6 +95,43 @@ static void GetSiblingPath(const wchar_t* filename, wchar_t* out, size_t cch)
     StringCchPrintfW(out, cch, L"%s%s", buf, filename);
 }
 
+static void BuildPipeName(char* out, size_t outSize)
+{
+    char modulePath[MAX_PATH];
+    GetModuleFileNameA(g_hSelf, modulePath, MAX_PATH);
+
+    const char* fileName = strrchr(modulePath, '\\');
+    fileName = fileName ? fileName + 1 : modulePath;
+
+    const char* prefix = "WpfInspector.NativeBootstrap.";
+    const char* suffix = ".dll";
+
+    if (strncmp(fileName, prefix, strlen(prefix)) == 0)
+    {
+        const char* sessionStart = fileName + strlen(prefix);
+        const char* suffixPos = strstr(sessionStart, suffix);
+        if (suffixPos && suffixPos > sessionStart)
+        {
+            char sessionId[64];
+            size_t sessionLength = (size_t)(suffixPos - sessionStart);
+            if (sessionLength < sizeof(sessionId))
+            {
+                memcpy(sessionId, sessionStart, sessionLength);
+                sessionId[sessionLength] = '\0';
+                sprintf_s(out, outSize,
+                          "\\\\.\\pipe\\wpfinspector-%u-%s",
+                          GetCurrentProcessId(),
+                          sessionId);
+                return;
+            }
+        }
+    }
+
+    sprintf_s(out, outSize,
+              "\\\\.\\pipe\\wpfinspector-%u",
+              GetCurrentProcessId());
+}
+
 /* ---- 注入スレッド ------------------------------------------------------- */
 
 static DWORD WINAPI BootstrapThread(LPVOID _unused)
@@ -132,7 +170,7 @@ static DWORD WINAPI BootstrapThread(LPVOID _unused)
      *    既に .NET が走っているプロセスでは 0x80008060 (HostApiAlreadyInitialized)
      *    が返るが、これは正常 — ctx には有効なセカンダリコンテキストが入る。 */
     wchar_t runtimeConfigPath[MAX_PATH];
-    GetSiblingPath(L"WpfInspector.InspectionPayload.runtimeconfig.json", runtimeConfigPath, MAX_PATH);
+    GetSiblingPath(L"WpfInspector.TestHelper.runtimeconfig.json", runtimeConfigPath, MAX_PATH);
     Log("runtimeconfig: %ls", runtimeConfigPath);
 
     hostfxr_handle ctx = NULL;
@@ -155,15 +193,15 @@ static DWORD WINAPI BootstrapThread(LPVOID _unused)
         return 4;
     }
 
-    /* 4. WpfInspector.InspectionPayload.dll をロードして EntryPoint.Run を取得 */
+    /* 4. WpfInspector.TestHelper.dll をロードして EntryPoint.Run を取得 */
     wchar_t assemblyPath[MAX_PATH];
-    GetSiblingPath(L"WpfInspector.InspectionPayload.dll", assemblyPath, MAX_PATH);
+    GetSiblingPath(L"WpfInspector.TestHelper.dll", assemblyPath, MAX_PATH);
     Log("assembly: %ls", assemblyPath);
 
     component_entry_point_fn pfn_run = NULL;
     rc = pfn_load(
         assemblyPath,
-        L"WpfInspector.InspectionPayload.EntryPoint, WpfInspector.InspectionPayload",
+        L"WpfInspector.TestHelper.EntryPoint, WpfInspector.TestHelper",
         L"Run",
         NULL,   /* 標準 component_entry_point_fn */
         NULL,
@@ -178,9 +216,8 @@ static DWORD WINAPI BootstrapThread(LPVOID _unused)
     /* 5. パイプ名を構築して InspectionPayload に渡す
      *    名前: \\.\pipe\wpfinspector-{PID}
      *    WpfInspector 側がこの名前でサーバーを立てている。 */
-    char pipeName[64];
-    sprintf_s(pipeName, sizeof(pipeName),
-              "\\\\.\\pipe\\wpfinspector-%u", GetCurrentProcessId());
+    char pipeName[128];
+    BuildPipeName(pipeName, sizeof(pipeName));
     Log("calling EntryPoint.Run with pipe: %s", pipeName);
 
     int runRc = pfn_run(pipeName, (int)(strlen(pipeName) + 1));

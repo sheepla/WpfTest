@@ -4,6 +4,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using WpfInspector.InspectionPayload;
 
 namespace WpfInspector.TestHelper;
 
@@ -13,48 +14,83 @@ namespace WpfInspector.TestHelper;
 ///
 /// プロトコル（テキスト行区切り）:
 ///   [注入完了後] → "READY" を送信
+///   GET_TREE              → ビジュアルツリー JSON を返す
 ///   GET_TITLE             → ウィンドウタイトルを返す
 ///   GET_ITEMS:{name}      → DataGrid の行数を返す
 ///   GET_STATUS            → StatusMessage TextBlock の Text を返す
+///   GET_TEXT:{name}       → 要素のテキスト内容を返す
 ///   CLICK:{name}          → Button を押す
+///   TYPE:{name}:{text}    → TextBox にテキストを入力する
 ///   EXIT                  → 接続を終了する
 /// </summary>
 internal static class UiCommandHandler
 {
+    private static readonly Lock LogSync = new();
+
     internal static async Task RunAsync(string fullPipeName)
     {
         // "\\\\.\\pipe\\wpfinspector-{PID}" の "wpfinspector-{PID}" 部分だけ取り出す
         var pipeName = fullPipeName.Replace(@"\\.\pipe\", string.Empty)
                                    .TrimStart('\\').TrimStart('.');
+        Log($"RunAsync start full='{fullPipeName}' pipe='{pipeName}'");
 
-        try
+        while (true)
         {
-            using var pipe = new NamedPipeClientStream(
-                ".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
-
-            using var cts = new CancellationTokenSource(15_000);
-        await pipe.ConnectAsync(cts.Token);
-
-            using var reader = new StreamReader(pipe, Encoding.UTF8, leaveOpen: true);
-            await using var writer = new StreamWriter(pipe, Encoding.UTF8, leaveOpen: true)
+            try
             {
-                AutoFlush = true,
-                NewLine = "\n"
-            };
+                await using var pipe = new NamedPipeServerStream(
+                    pipeName,
+                    PipeDirection.InOut,
+                    maxNumberOfServerInstances: 1,
+                    PipeTransmissionMode.Byte,
+                    PipeOptions.Asynchronous);
 
-            await writer.WriteLineAsync("READY");
+                using var cts = new CancellationTokenSource(30_000);
+                Log($"Waiting for client pipe='{pipeName}'");
+                await pipe.WaitForConnectionAsync(cts.Token);
+                Log($"Connected pipe='{pipeName}'");
 
-            string? line;
-            while ((line = await reader.ReadLineAsync()) is not null)
-            {
-                if (line == "EXIT") break;
-                var response = Dispatch(line);
-                await writer.WriteLineAsync(response);
+                using var reader = new StreamReader(
+                    pipe,
+                    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                    detectEncodingFromByteOrderMarks: true,
+                    bufferSize: 1024,
+                    leaveOpen: true);
+                await using var writer = new StreamWriter(
+                    pipe,
+                    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                    bufferSize: 1024,
+                    leaveOpen: true)
+                {
+                    AutoFlush = true,
+                    NewLine = "\n"
+                };
+
+                await writer.WriteLineAsync("READY");
+                Log($"Sent READY pipe='{pipeName}'");
+
+                string? line;
+                while ((line = await reader.ReadLineAsync()) is not null)
+                {
+                    Log($"Received command='{line}' pipe='{pipeName}'");
+                    if (line == "EXIT")
+                    {
+                        Log($"Received EXIT pipe='{pipeName}'");
+                        break;
+                    }
+
+                    var response = Dispatch(line);
+                    Log($"Sending response length={response.Length} pipe='{pipeName}'");
+                    await writer.WriteLineAsync(response);
+                }
             }
-        }
-        catch
-        {
-            // 接続失敗は無視（テストが既に終了している場合など）
+            catch (Exception exception)
+            {
+                // 接続失敗・切断は無視し、同じプロセスに対する次回の解析要求を待つ
+                Log($"Loop exception pipe='{pipeName}' error={exception}");
+            }
+
+            await Task.Delay(250);
         }
     }
 
@@ -62,14 +98,20 @@ internal static class UiCommandHandler
     {
         try
         {
+            if (command == "GET_TREE")
+                return Inspector.CollectJson(Environment.ProcessId);
             if (command == "GET_TITLE")
                 return GetWindowTitle();
             if (command == "GET_STATUS")
                 return GetStatusText();
             if (command.StartsWith("GET_ITEMS:", StringComparison.Ordinal))
                 return GetDataGridItemCount(command[10..]);
+            if (command.StartsWith("GET_TEXT:", StringComparison.Ordinal))
+                return GetText(command[9..]);
             if (command.StartsWith("CLICK:", StringComparison.Ordinal))
                 return ClickButton(command[6..]);
+            if (command.StartsWith("TYPE:", StringComparison.Ordinal))
+                return TypeText(command[5..]);
             return "ERROR:Unknown command";
         }
         catch (Exception ex)
@@ -114,6 +156,21 @@ internal static class UiCommandHandler
         return count >= 0 ? count.ToString() : "ERROR:Grid not found";
     }
 
+    private static string GetText(string elementName)
+    {
+        string? text = null;
+        InvokeOnUiThread(() =>
+        {
+            var window = Application.Current?.MainWindow;
+            if (window is null) return;
+            var tb = FindDescendantByName<TextBlock>(window, elementName);
+            if (tb is not null) { text = tb.Text; return; }
+            var tbx = FindDescendantByName<TextBox>(window, elementName);
+            if (tbx is not null) { text = tbx.Text; return; }
+        });
+        return text ?? "ERROR:Not found";
+    }
+
     private static string ClickButton(string buttonName)
     {
         bool found = false;
@@ -128,6 +185,29 @@ internal static class UiCommandHandler
             found = true;
         });
         return found ? "OK" : "ERROR:Button not found";
+    }
+
+    private static string TypeText(string arg)
+    {
+        // arg = "SearchBox:hello world"
+        var sep = arg.IndexOf(':');
+        if (sep < 0) return "ERROR:Invalid format";
+        var name = arg[..sep];
+        var text = arg[(sep + 1)..];
+
+        bool done = false;
+        InvokeOnUiThread(() =>
+        {
+            var window = Application.Current?.MainWindow;
+            if (window is null) return;
+            var tb = FindDescendantByName<TextBox>(window, name)
+                  ?? FindDescendant<TextBox>(window, _ => true);
+            if (tb is null) return;
+            tb.Text = text;
+            tb.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
+            done = true;
+        });
+        return done ? "OK" : "ERROR:TextBox not found";
     }
 
     // ── ビジュアルツリー探索 ────────────────────────────────────────────────
@@ -159,5 +239,22 @@ internal static class UiCommandHandler
             action();
         else
             dispatcher.Invoke(action);
+    }
+
+    private static void Log(string message)
+    {
+        try
+        {
+            var logPath = Path.Combine(Path.GetTempPath(), $"wpfi_helper_{Environment.ProcessId}.log");
+            var line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {message}{Environment.NewLine}";
+            lock (LogSync)
+            {
+                File.AppendAllText(logPath, line, Encoding.UTF8);
+            }
+        }
+        catch
+        {
+            // ログ出力失敗は無視
+        }
     }
 }

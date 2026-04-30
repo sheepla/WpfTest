@@ -18,6 +18,42 @@
              Link="WpfInspector.NativeBootstrap.dll" />
   </ItemGroup>
 
+  <!-- TestHelper をビルドしてアプリ出力へコピー（Bootstrap.c が同フォルダに要求） -->
+  <Target Name="CopyTestHelper" AfterTargets="Build">
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.TestHelper\WpfInspector.TestHelper.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration)" />
+    <ItemGroup>
+      <_TestHelperFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.TestHelper\bin\$(Configuration)\net9.0-windows\WpfInspector.TestHelper.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_TestHelperFiles)"
+          DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="true" />
+
+    <!--
+      hostfxr のセカンダリコンテキストはマルチフレームワーク runtimeconfig を受け付けない。
+      SDK が生成した runtimeconfig (Microsoft.WindowsDesktop.App を含む) を
+      Microsoft.NETCore.App のみの最小構成で上書きする。
+      WPF アセンブリは注入先プロセスに既ロード済みのため指定不要。
+    -->
+    <WriteLinesToFile
+      File="$(OutputPath)WpfInspector.TestHelper.runtimeconfig.json"
+      Lines='{
+  "runtimeOptions": {
+    "tfm": "net9.0",
+    "rollForward": "LatestMinor",
+    "frameworks": [
+      {
+        "name": "Microsoft.NETCore.App",
+        "version": "9.0.0"
+      }
+    ]
+  }
+}'
+      Overwrite="true"
+      Encoding="UTF-8" />
+  </Target>
+
   <!-- InspectionPayload をビルドしてアプリ出力へコピー -->
   <Target Name="CopyInspectionPayload" AfterTargets="Build">
     <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.InspectionPayload\WpfInspector.InspectionPayload.csproj"

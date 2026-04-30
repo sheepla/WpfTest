@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace WpfInspector.Injector;
@@ -20,7 +21,9 @@ public static class ProcessInjector
 
         var handle = NativeMethods.OpenProcess(NativeMethods.PROCESS_ALL_ACCESS, false, processId);
         if (handle == IntPtr.Zero)
-            throw new Win32Exception($"OpenProcess 失敗 (PID {processId})");
+            throw new Win32Exception(
+                Marshal.GetLastPInvokeError(),
+                $"OpenProcess 失敗 (PID {processId})");
 
         try
         {
@@ -44,7 +47,9 @@ public static class ProcessInjector
             NativeMethods.PAGE_READWRITE);
 
         if (remoteBuffer == IntPtr.Zero)
-            throw new Win32Exception("VirtualAllocEx 失敗");
+            throw new Win32Exception(
+                Marshal.GetLastPInvokeError(),
+                "VirtualAllocEx 失敗");
 
         try
         {
@@ -61,7 +66,9 @@ public static class ProcessInjector
                 0, out _);
 
             if (thread == IntPtr.Zero)
-                throw new Win32Exception("CreateRemoteThread 失敗");
+                throw new Win32Exception(
+                    Marshal.GetLastPInvokeError(),
+                    "CreateRemoteThread 失敗");
 
             // LoadLibraryW スレッドの完了を待つ（最大 10 秒）
             var waitResult = NativeMethods.WaitForSingleObject(thread, 10_000);
