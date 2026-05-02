@@ -1,8 +1,10 @@
 using System.ComponentModel;
 using System.IO.Pipes;
-using System.Text;
 using System.Security.AccessControl;
+using System.Text;
+using System.Text.Json.Nodes;
 using WpfInspector.Injector;
+using WpfInspector.Protocol;
 
 namespace WpfInspector.McpServer.Session;
 
@@ -51,7 +53,11 @@ internal sealed class WpfSession : IAsyncDisposable
         {
             var sourcePath = Path.Combine(baseDirectory, fileName);
             if (!File.Exists(sourcePath))
-                throw new FileNotFoundException($"注入に必要なファイルが見つかりません: {fileName}", sourcePath);
+            {
+                if (IsRequiredManagedAsset(fileName))
+                    throw new FileNotFoundException($"注入に必要なファイルが見つかりません: {fileName}", sourcePath);
+                continue;
+            }
             File.Copy(sourcePath, Path.Combine(sessionDirectory, fileName), overwrite: true);
         }
 
@@ -136,6 +142,27 @@ internal sealed class WpfSession : IAsyncDisposable
         }
     }
 
+    public async Task<PipeResponse> SendRequestAsync(string operation, JsonObject? arguments = null, CancellationToken ct = default)
+    {
+        var request = new PipeRequest
+        {
+            Operation = operation,
+            Arguments = arguments ?? []
+        };
+
+        var payload = await SendCommandAsync(PipeProtocol.EncodeRequest(request), ct);
+        if (!PipeProtocol.TryDecodeResponse(payload, out var response) || response is null)
+        {
+            return PipeProtocol.Error(
+                errorCode: "invalid_response",
+                errorMessage: "TestHelper から RPC 応答を解析できませんでした。",
+                requestId: request.RequestId,
+                data: JsonValue.Create(payload));
+        }
+
+        return response;
+    }
+
     public async ValueTask DisposeAsync()
     {
         try { await _writer.WriteLineAsync("EXIT"); } catch { }
@@ -155,4 +182,7 @@ internal sealed class WpfSession : IAsyncDisposable
             "D:(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;AU)");
         return security;
     }
+
+    private static bool IsRequiredManagedAsset(string fileName) =>
+        InjectionAssets.ManagedPayloadFiles.Contains(fileName, StringComparer.OrdinalIgnoreCase);
 }

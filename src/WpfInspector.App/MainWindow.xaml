@@ -4,7 +4,9 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:models="clr-namespace:WpfInspector.Core.Models;assembly=WpfInspector.Core"
+        xmlns:controls="clr-namespace:WpfInspector.App.Controls"
         xmlns:converters="clr-namespace:WpfInspector.App.Converters"
+        xmlns:validation="clr-namespace:WpfInspector.App.Validation"
         mc:Ignorable="d"
         Title="WpfInspector"
         Width="1480"
@@ -19,6 +21,9 @@
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
         <converters:NullToCollapsedConverter x:Key="NullToCollapsedConverter" />
+
+        <SolidColorBrush x:Key="FixtureAccentBrush" Color="#0F6CBD" />
+        <SolidColorBrush x:Key="FixtureSurfaceBrush" Color="#EBF3FF" />
 
         <Style x:Key="SectionGroupBoxStyle" TargetType="GroupBox">
             <Setter Property="Margin" Value="0,0,0,10" />
@@ -35,6 +40,89 @@
         <Style x:Key="MutedTextStyle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
             <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <Style x:Key="GridWrappedTextStyle" TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="FixtureCardStyle" TargetType="Border">
+            <Setter Property="Margin" Value="0,0,0,10" />
+            <Setter Property="Padding" Value="10" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}" />
+            <Setter Property="Background" Value="White" />
+        </Style>
+
+        <Style x:Key="ValidationFixtureTextBoxStyle" TargetType="TextBox">
+            <Setter Property="Padding" Value="6,4" />
+            <Setter Property="BorderBrush" Value="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}" />
+            <Style.Triggers>
+                <Trigger Property="Validation.HasError" Value="True">
+                    <Setter Property="BorderBrush" Value="IndianRed" />
+                    <Setter Property="BorderThickness" Value="2" />
+                    <Setter Property="ToolTip"
+                            Value="{Binding RelativeSource={RelativeSource Self}, Path=(Validation.Errors)[0].ErrorContent}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="FixtureTemplateToggleStyle" TargetType="ToggleButton">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Chrome"
+                                Padding="12"
+                                Background="White"
+                                BorderBrush="{DynamicResource FixtureAccentBrush}"
+                                BorderThickness="2"
+                                CornerRadius="10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel>
+                                    <TextBlock FontWeight="SemiBold"
+                                               Text="ControlTemplate fixture" />
+                                    <TextBlock Margin="0,4,0,0"
+                                               Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
+                                               Text="IsChecked で alternate chrome と badge を切り替えます。" />
+                                </StackPanel>
+
+                                <Border x:Name="Badge"
+                                        Grid.Column="1"
+                                        Margin="12,0,0,0"
+                                        Padding="8,4"
+                                        Background="{DynamicResource FixtureAccentBrush}"
+                                        CornerRadius="999"
+                                        Visibility="Collapsed">
+                                    <TextBlock Foreground="White"
+                                               FontWeight="SemiBold"
+                                               Text="ACTIVE" />
+                                </Border>
+                            </Grid>
+                        </Border>
+
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Chrome"
+                                        Property="Background"
+                                        Value="{DynamicResource FixtureSurfaceBrush}" />
+                                <Setter TargetName="Chrome"
+                                        Property="BorderThickness"
+                                        Value="3" />
+                                <Setter TargetName="Badge"
+                                        Property="Visibility"
+                                        Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style TargetType="DataGrid">
@@ -95,7 +183,8 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
+                        <RowDefinition Height="2.5*" />
+                        <RowDefinition Height="1.8*" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
@@ -167,6 +256,44 @@
                     </DataGrid>
 
                     <GroupBox Grid.Row="3"
+                              Header="ロード済みモジュール">
+                        <Grid Margin="8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0"
+                                       Margin="0,0,0,8"
+                                       Style="{StaticResource MutedTextStyle}"
+                                       Text="{Binding SelectedProcessPdbSummary}" />
+
+                            <DataGrid Grid.Row="1"
+                                      x:Name="ModulesGrid"
+                                      AutoGenerateColumns="False"
+                                      ItemsSource="{Binding Modules}">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Module"
+                                                        Width="1.4*"
+                                                        Binding="{Binding ModuleName}" />
+                                    <DataGridTextColumn Header="Size"
+                                                        Width="95"
+                                                        Binding="{Binding ModuleMemorySize, StringFormat={}{0:N0} B}" />
+                                    <DataGridTextColumn Header="Symbol"
+                                                        Width="120"
+                                                        Binding="{Binding SymbolInfo.SymbolState}" />
+                                    <DataGridTextColumn Header="Path"
+                                                        Width="2.4*"
+                                                        Binding="{Binding ModulePath}" />
+                                    <DataGridTextColumn Header="Suggested PDB"
+                                                        Width="2.1*"
+                                                        Binding="{Binding SymbolInfo.SuggestedPdbPath}" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </GroupBox>
+
+                    <GroupBox Grid.Row="4"
                               Header="選択中プロセス">
                         <Grid Margin="8">
                             <Grid.RowDefinitions>
@@ -329,25 +456,130 @@
                                                Style="{StaticResource MutedTextStyle}"
                                                Text="{Binding SelectedInspectedWindowSummary}" />
 
-                                    <TreeView Grid.Row="2"
-                                              ItemsSource="{Binding SelectedInspectedWindowRoots}">
-                                        <TreeView.Resources>
-                                            <HierarchicalDataTemplate DataType="{x:Type models:WpfElementInfo}"
-                                                                      ItemsSource="{Binding Children}">
-                                                <StackPanel Orientation="Horizontal"
-                                                            Margin="2,1">
-                                                    <TextBlock FontWeight="SemiBold"
-                                                               Text="{Binding TypeName}" />
-                                                    <TextBlock Margin="6,0,0,0"
-                                                               Text="{Binding Name}" />
-                                                    <TextBlock Margin="6,0,0,0"
-                                                               Visibility="{Binding DataContextTypeName, Converter={StaticResource NullToCollapsedConverter}}"
-                                                               Text="{Binding DataContextTypeName, StringFormat=DataContext: {0}}"
-                                                               Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
-                                                </StackPanel>
-                                            </HierarchicalDataTemplate>
-                                        </TreeView.Resources>
-                                    </TreeView>
+                                    <Grid Grid.Row="2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="1.35*" />
+                                            <ColumnDefinition Width="12" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <GroupBox Grid.Column="0"
+                                                  Header="Visual Tree">
+                                            <TreeView x:Name="InspectionTree"
+                                                      ItemsSource="{Binding SelectedInspectedWindowRoots}"
+                                                      SelectedItemChanged="InspectionTree_OnSelectedItemChanged">
+                                                <TreeView.Resources>
+                                                    <HierarchicalDataTemplate DataType="{x:Type models:WpfElementInfo}"
+                                                                              ItemsSource="{Binding Children}">
+                                                        <StackPanel Orientation="Horizontal"
+                                                                    Margin="2,1">
+                                                            <TextBlock FontWeight="SemiBold"
+                                                                       Text="{Binding TypeName}" />
+                                                            <TextBlock Margin="6,0,0,0"
+                                                                       Visibility="{Binding Name, Converter={StaticResource NullToCollapsedConverter}}"
+                                                                       Text="{Binding Name}" />
+                                                            <TextBlock Margin="6,0,0,0"
+                                                                       Visibility="{Binding AutomationId, Converter={StaticResource NullToCollapsedConverter}}"
+                                                                       Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
+                                                                       Text="{Binding AutomationId, StringFormat=AutomationId: {0}}" />
+                                                            <TextBlock Margin="6,0,0,0"
+                                                                       Visibility="{Binding DataContextTypeName, Converter={StaticResource NullToCollapsedConverter}}"
+                                                                       Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
+                                                                       Text="{Binding DataContextTypeName, StringFormat=DataContext: {0}}" />
+                                                        </StackPanel>
+                                                    </HierarchicalDataTemplate>
+                                                </TreeView.Resources>
+                                            </TreeView>
+                                        </GroupBox>
+
+                                        <Grid Grid.Column="2">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="*" />
+                                            </Grid.RowDefinitions>
+
+                                            <TextBlock Grid.Row="0"
+                                                       FontWeight="SemiBold"
+                                                       Text="{Binding SelectedInspectedElementHeadline}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Grid.Row="1"
+                                                       Margin="0,6,0,10"
+                                                       Style="{StaticResource MutedTextStyle}"
+                                                       Text="{Binding InspectionResultGuide}" />
+
+                                            <TabControl Grid.Row="2">
+                                                <TabItem Header="Result">
+                                                    <DataGrid AutoGenerateColumns="False"
+                                                              ItemsSource="{Binding InspectionResultProperties}">
+                                                        <DataGrid.Columns>
+                                                            <DataGridTextColumn Header="Property"
+                                                                                Width="180"
+                                                                                Binding="{Binding Name}" />
+                                                            <DataGridTextColumn Header="Value"
+                                                                                Width="*"
+                                                                                Binding="{Binding Value}"
+                                                                                ElementStyle="{StaticResource GridWrappedTextStyle}" />
+                                                        </DataGrid.Columns>
+                                                    </DataGrid>
+                                                </TabItem>
+
+                                                <TabItem Header="Runtime">
+                                                    <DataGrid AutoGenerateColumns="False"
+                                                              ItemsSource="{Binding RuntimeAssemblies}">
+                                                        <DataGrid.Columns>
+                                                            <DataGridTextColumn Header="Assembly"
+                                                                                Width="1.6*"
+                                                                                Binding="{Binding AssemblyName}" />
+                                                            <DataGridTextColumn Header="Representative Type"
+                                                                                Width="2*"
+                                                                                Binding="{Binding RepresentativeTypeName}"
+                                                                                ElementStyle="{StaticResource GridWrappedTextStyle}" />
+                                                            <DataGridTextColumn Header="Source"
+                                                                                Width="110"
+                                                                                Binding="{Binding DiscoverySource}" />
+                                                            <DataGridCheckBoxColumn Header="Dynamic"
+                                                                                    Width="80"
+                                                                                    Binding="{Binding IsDynamic}" />
+                                                            <DataGridCheckBoxColumn Header="App Dir"
+                                                                                    Width="80"
+                                                                                    Binding="{Binding IsInAppDirectory}" />
+                                                        </DataGrid.Columns>
+                                                    </DataGrid>
+                                                </TabItem>
+
+                                                <TabItem Header="Window">
+                                                    <DataGrid AutoGenerateColumns="False"
+                                                              ItemsSource="{Binding SelectedWindowProperties}">
+                                                        <DataGrid.Columns>
+                                                            <DataGridTextColumn Header="Property"
+                                                                                Width="180"
+                                                                                Binding="{Binding Name}" />
+                                                            <DataGridTextColumn Header="Value"
+                                                                                Width="*"
+                                                                                Binding="{Binding Value}"
+                                                                                ElementStyle="{StaticResource GridWrappedTextStyle}" />
+                                                        </DataGrid.Columns>
+                                                    </DataGrid>
+                                                </TabItem>
+
+                                                <TabItem Header="Element">
+                                                    <DataGrid AutoGenerateColumns="False"
+                                                              ItemsSource="{Binding SelectedElementProperties}">
+                                                        <DataGrid.Columns>
+                                                            <DataGridTextColumn Header="Property"
+                                                                                Width="180"
+                                                                                Binding="{Binding Name}" />
+                                                            <DataGridTextColumn Header="Value"
+                                                                                Width="*"
+                                                                                Binding="{Binding Value}"
+                                                                                ElementStyle="{StaticResource GridWrappedTextStyle}" />
+                                                        </DataGrid.Columns>
+                                                    </DataGrid>
+                                                </TabItem>
+                                            </TabControl>
+                                        </Grid>
+                                    </Grid>
                                 </Grid>
                             </TabItem>
 
@@ -431,7 +663,8 @@
                                                 <DataGrid.Columns>
                                                     <DataGridTextColumn Header="Document"
                                                                         Width="3*"
-                                                                        Binding="{Binding Name}" />
+                                                                        Binding="{Binding Name}"
+                                                                        ElementStyle="{StaticResource GridWrappedTextStyle}" />
                                                     <DataGridTextColumn Header="Language"
                                                                         Width="120"
                                                                         Binding="{Binding Language}" />
@@ -454,10 +687,12 @@
                                                                         Binding="{Binding Token, StringFormat=0x{0:X8}}" />
                                                     <DataGridTextColumn Header="Method"
                                                                         Width="2.4*"
-                                                                        Binding="{Binding DisplayName}" />
+                                                                        Binding="{Binding DisplayName}"
+                                                                        ElementStyle="{StaticResource GridWrappedTextStyle}" />
                                                     <DataGridTextColumn Header="Document"
                                                                         Width="2*"
-                                                                        Binding="{Binding Document}" />
+                                                                        Binding="{Binding Document}"
+                                                                        ElementStyle="{StaticResource GridWrappedTextStyle}" />
                                                     <DataGridTextColumn Header="Seq"
                                                                         Width="90"
                                                                         Binding="{Binding SequencePointCount}" />
@@ -469,6 +704,336 @@
                                         </TabItem>
                                     </TabControl>
                                 </Grid>
+                            </TabItem>
+
+                            <TabItem Header="Fixture Lab">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Disabled"
+                                              DataContext="{Binding FixtureLab}">
+                                    <Grid Margin="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="12" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+
+                                        <GroupBox Grid.Row="0"
+                                                  Grid.Column="0"
+                                                  Margin="0,0,0,12"
+                                                  Header="Palette / Template">
+                                            <StackPanel Margin="8">
+                                                <DockPanel Margin="0,0,0,8"
+                                                           LastChildFill="True">
+                                                    <Button DockPanel.Dock="Right"
+                                                            x:Name="CycleResourcePaletteButton"
+                                                            MinWidth="92"
+                                                            Padding="12,4"
+                                                            Margin="12,0,0,0"
+                                                            Command="{Binding CycleResourcePaletteCommand}"
+                                                            Content="配色切替" />
+                                                    <TextBlock Style="{StaticResource MutedTextStyle}"
+                                                               Text="{Binding ResourcePaletteSummary}" />
+                                                </DockPanel>
+
+                                                <Border Style="{StaticResource FixtureCardStyle}"
+                                                        Background="{DynamicResource FixtureSurfaceBrush}"
+                                                        BorderBrush="{DynamicResource FixtureAccentBrush}">
+                                                    <StackPanel>
+                                                        <TextBlock FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource FixtureAccentBrush}"
+                                                                   Text="DynamicResource surface" />
+                                                        <TextBlock Margin="0,6,0,0"
+                                                                   Style="{StaticResource MutedTextStyle}"
+                                                                   Text="Window.Resources の accent / surface 差し替えを即座に反映します。" />
+                                                        <Border Margin="0,10,0,0"
+                                                                Padding="8"
+                                                                Background="White"
+                                                                CornerRadius="6">
+                                                            <Border.Resources>
+                                                                <SolidColorBrush x:Key="FixtureAccentBrush"
+                                                                                 Color="#7A4A18" />
+                                                            </Border.Resources>
+                                                            <TextBlock FontWeight="SemiBold"
+                                                                       Foreground="{DynamicResource FixtureAccentBrush}"
+                                                                       Text="Local override sample" />
+                                                        </Border>
+                                                    </StackPanel>
+                                                </Border>
+
+                                                <ToggleButton x:Name="TemplateFixtureToggle"
+                                                              Margin="0,0,0,6"
+                                                              IsChecked="{Binding IsTemplateActive}"
+                                                              Style="{StaticResource FixtureTemplateToggleStyle}" />
+                                                <TextBlock Style="{StaticResource MutedTextStyle}"
+                                                           Text="{Binding TemplateSummary}" />
+                                            </StackPanel>
+                                        </GroupBox>
+
+                                        <GroupBox Grid.Row="0"
+                                                  Grid.Column="2"
+                                                  Margin="0,0,0,12"
+                                                  Header="Validation / Bindings">
+                                            <StackPanel Margin="8">
+                                                <Border Style="{StaticResource FixtureCardStyle}">
+                                                    <StackPanel>
+                                                        <TextBlock FontWeight="SemiBold"
+                                                                   Text="Validation rule" />
+                                                        <TextBlock Margin="0,6,0,0"
+                                                                   Style="{StaticResource MutedTextStyle}"
+                                                                   Text="{Binding ValidationSummary}" />
+                                                        <TextBox x:Name="ValidationFixtureTextBox"
+                                                                 Margin="0,10,0,0"
+                                                                 Style="{StaticResource ValidationFixtureTextBoxStyle}">
+                                                            <TextBox.Text>
+                                                                <Binding Path="ValidatedToken"
+                                                                         UpdateSourceTrigger="PropertyChanged"
+                                                                         NotifyOnValidationError="True">
+                                                                    <Binding.ValidationRules>
+                                                                        <validation:TokenFormatValidationRule />
+                                                                    </Binding.ValidationRules>
+                                                                </Binding>
+                                                            </TextBox.Text>
+                                                        </TextBox>
+                                                        <TextBlock Margin="0,6,0,0"
+                                                                   Foreground="IndianRed"
+                                                                   Visibility="{Binding ElementName=ValidationFixtureTextBox, Path=(Validation.HasError), Converter={StaticResource BoolToVisibilityConverter}}"
+                                                                   Text="{Binding ElementName=ValidationFixtureTextBox, Path=(Validation.Errors)[0].ErrorContent}" />
+                                                    </StackPanel>
+                                                </Border>
+
+                                                <Border Style="{StaticResource FixtureCardStyle}">
+                                                    <StackPanel>
+                                                        <TextBlock FontWeight="SemiBold"
+                                                                   Text="MultiBinding / PriorityBinding" />
+                                                        <TextBlock Margin="0,8,0,0"
+                                                                   Style="{StaticResource MutedTextStyle}"
+                                                                   Text="MultiBinding result" />
+                                                        <TextBlock FontSize="16"
+                                                                   FontWeight="SemiBold">
+                                                            <TextBlock.Text>
+                                                                <MultiBinding StringFormat="{}{0} {1}">
+                                                                    <Binding Path="MultiBindingFirstName" />
+                                                                    <Binding Path="MultiBindingLastName" />
+                                                                </MultiBinding>
+                                                            </TextBlock.Text>
+                                                        </TextBlock>
+
+                                                        <Border Margin="0,10,0,0"
+                                                                Padding="10"
+                                                                BorderBrush="{DynamicResource FixtureAccentBrush}"
+                                                                BorderThickness="1"
+                                                                CornerRadius="6">
+                                                            <TextBlock x:Name="PriorityBindingFixtureText"
+                                                                       FontWeight="SemiBold">
+                                                                <TextBlock.Text>
+                                                                    <PriorityBinding>
+                                                                        <Binding Path="SlowPriorityValue"
+                                                                                 IsAsync="True" />
+                                                                        <Binding Path="PriorityFallbackValue" />
+                                                                    </PriorityBinding>
+                                                                </TextBlock.Text>
+                                                            </TextBlock>
+                                                        </Border>
+
+                                                        <DockPanel Margin="0,8,0,0"
+                                                                   LastChildFill="True">
+                                                            <Button DockPanel.Dock="Right"
+                                                                    MinWidth="92"
+                                                                    Padding="12,4"
+                                                                    Margin="12,0,0,0"
+                                                                    Command="{Binding RefreshPriorityBindingCommand}"
+                                                                    Content="再評価" />
+                                                            <TextBlock Style="{StaticResource MutedTextStyle}"
+                                                                       Text="{Binding PriorityBindingSummary}" />
+                                                        </DockPanel>
+                                                    </StackPanel>
+                                                </Border>
+                                            </StackPanel>
+                                        </GroupBox>
+
+                                        <GroupBox Grid.Row="1"
+                                                  Grid.Column="0"
+                                                  Margin="0,0,0,12"
+                                                  Header="Popup / ContextMenu">
+                                            <StackPanel Margin="8">
+                                                <TextBlock Style="{StaticResource MutedTextStyle}"
+                                                           Text="{Binding PopupSummary}" />
+
+                                                <WrapPanel Margin="0,10,0,10">
+                                                    <ToggleButton x:Name="PopupFixtureToggleButton"
+                                                                  MinWidth="110"
+                                                                  Padding="12,4"
+                                                                  Margin="0,0,8,0"
+                                                                  IsChecked="{Binding IsPopupOpen}"
+                                                                  Content="Popup" />
+                                                    <Button x:Name="ContextMenuFixtureButton"
+                                                            MinWidth="130"
+                                                            Padding="12,4"
+                                                            Tag="{Binding}"
+                                                            Command="{Binding ToggleContextMenuCommand}"
+                                                            Content="ContextMenu">
+                                                        <Button.ContextMenu>
+                                                            <ContextMenu DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}"
+                                                                         IsOpen="{Binding IsContextMenuOpen, Mode=TwoWay}">
+                                                                <MenuItem Header="Inspect visual" />
+                                                                <MenuItem Header="Snapshot bindings" />
+                                                            </ContextMenu>
+                                                        </Button.ContextMenu>
+                                                    </Button>
+                                                </WrapPanel>
+
+                                                <Grid>
+                                                    <Button x:Name="PopupAnchorButton"
+                                                            Width="120"
+                                                            Padding="12,4"
+                                                            HorizontalAlignment="Left"
+                                                            Content="Popup anchor" />
+                                                    <Popup IsOpen="{Binding IsPopupOpen, Mode=TwoWay}"
+                                                           Placement="Bottom"
+                                                           PlacementTarget="{Binding ElementName=PopupAnchorButton}"
+                                                           StaysOpen="False"
+                                                           AllowsTransparency="True">
+                                                        <Border Padding="10"
+                                                                Background="White"
+                                                                BorderBrush="{DynamicResource FixtureAccentBrush}"
+                                                                BorderThickness="2"
+                                                                CornerRadius="8">
+                                                            <StackPanel>
+                                                                <TextBlock FontWeight="SemiBold"
+                                                                           Text="Detached popup surface" />
+                                                                <TextBlock Margin="0,4,0,0"
+                                                                           Style="{StaticResource MutedTextStyle}"
+                                                                           Text="Visual tree と別経路で管理される Popup を露出します。" />
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </Popup>
+                                                </Grid>
+                                            </StackPanel>
+                                        </GroupBox>
+
+                                        <GroupBox Grid.Row="1"
+                                                  Grid.Column="2"
+                                                  Margin="0,0,0,12"
+                                                  Header="Virtualization">
+                                            <Grid Margin="8">
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="*" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+
+                                                <TextBlock Grid.Row="0"
+                                                           Style="{StaticResource MutedTextStyle}"
+                                                           Text="VirtualizingStackPanel + Recycling を使う 250 件の fixture list です。" />
+
+                                                <DockPanel Grid.Row="1"
+                                                           Margin="0,8,0,8"
+                                                           LastChildFill="True">
+                                                    <Button DockPanel.Dock="Right"
+                                                            x:Name="SelectVirtualizedTailButton"
+                                                            MinWidth="110"
+                                                            Padding="12,4"
+                                                            Margin="12,0,0,0"
+                                                            Command="{Binding SelectVirtualizedTailCommand}"
+                                                            Content="末尾を選択" />
+                                                    <TextBlock Style="{StaticResource MutedTextStyle}"
+                                                               Text="{Binding VirtualizedSelectionSummary}" />
+                                                </DockPanel>
+
+                                                <ListBox x:Name="VirtualizedItemsListBox"
+                                                         Grid.Row="2"
+                                                         Height="210"
+                                                         ScrollViewer.CanContentScroll="True"
+                                                         ItemsSource="{Binding VirtualizedItems}"
+                                                         SelectedItem="{Binding SelectedVirtualizedItem}"
+                                                         VirtualizingPanel.IsVirtualizing="True"
+                                                         VirtualizingPanel.VirtualizationMode="Recycling">
+                                                    <ListBox.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <DockPanel Margin="2">
+                                                                <TextBlock DockPanel.Dock="Right"
+                                                                           Style="{StaticResource MutedTextStyle}"
+                                                                           Text="{Binding State}" />
+                                                                <TextBlock FontWeight="SemiBold"
+                                                                           Text="{Binding Label}" />
+                                                            </DockPanel>
+                                                        </DataTemplate>
+                                                    </ListBox.ItemTemplate>
+                                                </ListBox>
+
+                                                <TextBlock Grid.Row="3"
+                                                           Margin="0,8,0,0"
+                                                           Style="{StaticResource MutedTextStyle}"
+                                                           Text="UI tests から selection に伴う realize を確認しやすいよう、即座に末尾へジャンプできます。" />
+                                            </Grid>
+                                        </GroupBox>
+
+                                        <GroupBox Grid.Row="2"
+                                                  Grid.Column="0"
+                                                  Header="Async / Dispatcher">
+                                            <StackPanel Margin="8">
+                                                <Border Style="{StaticResource FixtureCardStyle}">
+                                                    <StackPanel>
+                                                        <DockPanel LastChildFill="True">
+                                                            <Button DockPanel.Dock="Right"
+                                                                    x:Name="RunAsyncFixtureButton"
+                                                                    MinWidth="120"
+                                                                    Padding="12,4"
+                                                                    Margin="12,0,0,0"
+                                                                    Command="{Binding RunAsyncCommand}"
+                                                                    Content="非同期コマンド" />
+                                                            <TextBlock Style="{StaticResource MutedTextStyle}"
+                                                                       Text="{Binding AsyncCommandSummary}" />
+                                                        </DockPanel>
+                                                        <ProgressBar Margin="0,8,0,0"
+                                                                     Height="14"
+                                                                     Maximum="100"
+                                                                     Value="{Binding AsyncCommandProgress, Mode=OneWay}" />
+                                                    </StackPanel>
+                                                </Border>
+
+                                                <Border Style="{StaticResource FixtureCardStyle}">
+                                                    <StackPanel>
+                                                        <Button x:Name="SimulateDispatcherBusyButton"
+                                                                Width="180"
+                                                                Padding="12,4"
+                                                                HorizontalAlignment="Left"
+                                                                Command="{Binding SimulateDispatcherBusyCommand}"
+                                                                Content="UI スレッドをブロック" />
+                                                        <TextBlock Margin="0,8,0,0"
+                                                                   Text="{Binding DispatcherBusyStatus}"
+                                                                   TextWrapping="Wrap" />
+                                                        <TextBlock Margin="0,4,0,0"
+                                                                   Style="{StaticResource MutedTextStyle}"
+                                                                   Text="{Binding DispatcherLagSummary}" />
+                                                        <TextBlock Margin="0,4,0,0"
+                                                                   Style="{StaticResource MutedTextStyle}"
+                                                                   Text="{Binding DispatcherTimeoutSummary}" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </StackPanel>
+                                        </GroupBox>
+
+                                        <GroupBox Grid.Row="2"
+                                                  Grid.Column="2"
+                                                  Header="Interop / HWND Host">
+                                            <StackPanel Margin="8">
+                                                <TextBlock Style="{StaticResource MutedTextStyle}"
+                                                           Text="{Binding HwndHostSummary}" />
+                                                <controls:FixtureHwndHost x:Name="FixtureHwndHostSurface"
+                                                                          Margin="0,10,0,0"
+                                                                          Height="76"
+                                                                          Caption="{Binding HwndHostCaption}" />
+                                            </StackPanel>
+                                        </GroupBox>
+                                    </Grid>
+                                </ScrollViewer>
                             </TabItem>
                         </TabControl>
                     </Grid>

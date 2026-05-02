@@ -21,7 +21,7 @@ internal sealed class LlmAgentRunner
         提供されたツールを使ってユーザーのタスクを完了してください。
         操作前後に get_ui_state で UI 状態を確認し、正確に操作してください。
         タスクが完了したら必ず done ツールを呼び出してください。
-        ボタンの Name または AutomationId を使って要素を指定してください。
+        要素識別子には Name、AutomationId、stableId を使えます。
         """;
 
     internal LlmAgentRunner(WpfPipeClient pipe, string apiKey)
@@ -107,7 +107,7 @@ internal sealed class LlmAgentRunner
             {
                 "type": "object",
                 "properties": {
-                    "name": { "type": "string", "description": "ボタンの Name または AutomationId" }
+                    "name": { "type": "string", "description": "ボタンの Name / AutomationId / stableId" }
                 },
                 "required": ["name"]
             }
@@ -117,7 +117,7 @@ internal sealed class LlmAgentRunner
             {
                 "type": "object",
                 "properties": {
-                    "name": { "type": "string", "description": "TextBox の Name" },
+                    "name": { "type": "string", "description": "TextBox の Name / AutomationId / stableId" },
                     "text": { "type": "string", "description": "入力するテキスト" }
                 },
                 "required": ["name", "text"]
@@ -128,7 +128,7 @@ internal sealed class LlmAgentRunner
             {
                 "type": "object",
                 "properties": {
-                    "name": { "type": "string", "description": "要素の Name" }
+                    "name": { "type": "string", "description": "要素の Name / AutomationId / stableId" }
                 },
                 "required": ["name"]
             }

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Data;
+using WpfInspector.App.Services;
 using WpfInspector.Core;
 using WpfInspector.Core.Models;
 using WpfInspector.Core.Services;
@@ -24,6 +25,7 @@ public sealed class MainViewModel : ObservableObject
     private PdbAnalysisResult? _pdbAnalysisResult;
     private WpfInspectionResult? _wpfInspectionResult;
     private WpfWindowInfo? _selectedInspectedWindow;
+    private WpfElementInfo? _selectedInspectedElement;
 
     public MainViewModel(
         IProcessInspectionService processInspectionService,
@@ -33,9 +35,13 @@ public sealed class MainViewModel : ObservableObject
         _processInspectionService = processInspectionService;
         _pdbAnalysisService = pdbAnalysisService;
         _wpfInjectionService = wpfInjectionService;
+        FixtureLab = new FixtureLabViewModel();
+
         ProcessesView = CollectionViewSource.GetDefaultView(Processes);
         ProcessesView.Filter = FilterProcess;
     }
+
+    public FixtureLabViewModel FixtureLab { get; }
 
     public ObservableCollection<ProcessSummary> Processes { get; } = new();
     public ObservableCollection<ProcessModuleInfo> Modules { get; } = new();
@@ -43,6 +49,10 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<PdbMethodInfo> Methods { get; } = new();
     public ObservableCollection<string> Warnings { get; } = new();
     public ObservableCollection<WpfWindowInfo> InspectedWindows { get; } = new();
+    public ObservableCollection<WpfRuntimeAssemblyInfo> RuntimeAssemblies { get; } = new();
+    public ObservableCollection<InspectionPropertyItem> InspectionResultProperties { get; } = new();
+    public ObservableCollection<InspectionPropertyItem> SelectedWindowProperties { get; } = new();
+    public ObservableCollection<InspectionPropertyItem> SelectedElementProperties { get; } = new();
 
     public ICollectionView ProcessesView { get; }
 
@@ -143,10 +153,15 @@ public sealed class MainViewModel : ObservableObject
         get => _wpfInspectionResult;
         private set
         {
-            if (!SetProperty(ref _wpfInspectionResult, value)) return;
+            if (!SetProperty(ref _wpfInspectionResult, value))
+            {
+                return;
+            }
+
             OnPropertyChanged(nameof(WpfInspectionSummary));
             OnPropertyChanged(nameof(HasInspectionResult));
             OnPropertyChanged(nameof(UiResultSummary));
+            OnPropertyChanged(nameof(InspectionResultGuide));
         }
     }
 
@@ -163,12 +178,37 @@ public sealed class MainViewModel : ObservableObject
             OnPropertyChanged(nameof(HasSelectedInspectedWindow));
             OnPropertyChanged(nameof(SelectedInspectedWindowSummary));
             OnPropertyChanged(nameof(SelectedInspectedWindowRoots));
+            RefreshSelectedWindowDetails();
+            SelectedInspectedElement = value?.RootElement;
+        }
+    }
+
+    public WpfElementInfo? SelectedInspectedElement
+    {
+        get => _selectedInspectedElement;
+        private set
+        {
+            if (!SetProperty(ref _selectedInspectedElement, value))
+            {
+                return;
+            }
+
+            OnPropertyChanged(nameof(HasSelectedInspectedElement));
+            OnPropertyChanged(nameof(SelectedInspectedElementHeadline));
+            RefreshSelectedElementDetails();
         }
     }
 
     public bool HasInspectionResult => _wpfInspectionResult is not null;
 
     public bool HasSelectedInspectedWindow => _selectedInspectedWindow is not null;
+
+    public bool HasSelectedInspectedElement => _selectedInspectedElement is not null;
+
+    public string InspectionResultGuide =>
+        WpfInspectionResult is null
+            ? "UI 走査を実行すると、結果 DTO の公開プロパティをここで確認できます。"
+            : "このペインは結果 DTO の公開プロパティをそのまま表示します。将来の richer model 追加分もここで追えます。";
 
     public string WpfInspectionSummary
     {
@@ -305,6 +345,11 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    public string SelectedInspectedElementHeadline =>
+        _selectedInspectedElement is null
+            ? "ノードを選択すると要素詳細を表示します。"
+            : BuildElementHeadline(_selectedInspectedElement);
+
     public IReadOnlyList<WpfElementInfo> SelectedInspectedWindowRoots =>
         _selectedInspectedWindow?.RootElement is { } rootElement
             ? [rootElement]
@@ -357,6 +402,11 @@ public sealed class MainViewModel : ObservableObject
         Warnings.Count == 0
             ? "警告はありません。"
             : string.Join(Environment.NewLine, Warnings);
+
+    public void SelectInspectedElement(WpfElementInfo? element)
+    {
+        SelectedInspectedElement = element;
+    }
 
     public async Task RefreshProcessesAsync()
     {
@@ -436,7 +486,7 @@ public sealed class MainViewModel : ObservableObject
 
         await RunBusyAsync(inspectionModeMessage, async () =>
         {
-            var snapshot = SelectedProcessSnapshot!;
+            var snapshot = SelectedProcessSnapshot;
             var inspectionResult = await _wpfInjectionService.InspectAsync(SelectedProcess.ProcessId);
             ApplyInspectionResult(inspectionResult);
 
@@ -535,7 +585,12 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(WpfInspectionSummary));
         WpfInspectionResult = null;
         InspectedWindows.Clear();
+        RuntimeAssemblies.Clear();
+        InspectionResultProperties.Clear();
+        SelectedWindowProperties.Clear();
+        SelectedElementProperties.Clear();
         SelectedInspectedWindow = null;
+        SelectedInspectedElement = null;
         ClearPdbAnalysis();
     }
 
@@ -577,10 +632,27 @@ public sealed class MainViewModel : ObservableObject
     {
         WpfInspectionResult = result;
         ReplaceCollection(InspectedWindows, result.Windows);
+        ReplaceCollection(RuntimeAssemblies, result.RuntimeAssemblies);
+        RefreshInspectionResultDetails();
         SelectedInspectedWindow = InspectedWindows.FirstOrDefault();
         OnPropertyChanged(nameof(SelectedProcessPdbSummary));
         OnPropertyChanged(nameof(RuntimeAssemblySummary));
         OnPropertyChanged(nameof(UiResultSummary));
+    }
+
+    private void RefreshInspectionResultDetails()
+    {
+        ReplaceCollection(InspectionResultProperties, InspectionObjectFormatter.Describe(WpfInspectionResult));
+    }
+
+    private void RefreshSelectedWindowDetails()
+    {
+        ReplaceCollection(SelectedWindowProperties, InspectionObjectFormatter.Describe(SelectedInspectedWindow));
+    }
+
+    private void RefreshSelectedElementDetails()
+    {
+        ReplaceCollection(SelectedElementProperties, InspectionObjectFormatter.Describe(SelectedInspectedElement, "Children"));
     }
 
     private void ClearPdbAnalysis(string? warning = null)
@@ -630,6 +702,30 @@ public sealed class MainViewModel : ObservableObject
         }
 
         return string.Join(Environment.NewLine, notes);
+    }
+
+    private static string BuildElementHeadline(WpfElementInfo element)
+    {
+        var parts = new List<string> { element.TypeName };
+
+        if (!string.IsNullOrWhiteSpace(element.Name))
+        {
+            parts.Add($"Name={element.Name}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(element.AutomationId))
+        {
+            parts.Add($"AutomationId={element.AutomationId}");
+        }
+        else if (!string.IsNullOrWhiteSpace(element.Text))
+        {
+            parts.Add($"Text={element.Text}");
+        }
+
+        parts.Add(element.IsEnabled ? "Enabled" : "Disabled");
+        parts.Add(element.IsVisible ? "Visible" : "Hidden");
+
+        return string.Join(" | ", parts);
     }
 
     private static void ReplaceCollection<T>(ObservableCollection<T> collection, IEnumerable<T> items)

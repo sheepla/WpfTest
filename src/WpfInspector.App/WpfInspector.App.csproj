@@ -55,7 +55,9 @@
   </Target>
 
   <!-- InspectionPayload をビルドしてアプリ出力へコピー -->
-  <Target Name="CopyInspectionPayload" AfterTargets="Build">
+  <Target Name="CopyInspectionPayload"
+          AfterTargets="Build"
+          Condition="'$(SkipCopyInspectionPayload)' != 'true'">
     <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.InspectionPayload\WpfInspector.InspectionPayload.csproj"
              Targets="Build"
              Properties="Configuration=$(Configuration)" />

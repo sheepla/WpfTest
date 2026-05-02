@@ -145,18 +145,55 @@ public sealed class WpfAppFixture : IAsyncLifetime
             $"期待したステータスに遷移しませんでした。現在値: '{TryGetText("StatusMessageText")}'");
     }
 
+    public async Task<string> WaitForTextContainingAsync(TimeSpan timeout, string fragment)
+    {
+        return await WaitForConditionAsync(
+            () => TryFindTextContaining(fragment),
+            text => !string.IsNullOrWhiteSpace(text),
+            timeout,
+            $"'{fragment}' を含むテキストが見つかりませんでした。");
+    }
+
+    public async Task<int> WaitForTreeItemCountAsync(TimeSpan timeout, int minimumCount)
+    {
+        return await WaitForConditionAsync(
+            TryGetTreeItemCount,
+            count => count >= minimumCount,
+            timeout,
+            $"TreeView の項目数が {minimumCount} 件以上になりませんでした。現在値: {TryGetTreeItemCount()}");
+    }
+
     private static string FindAppExe()
     {
         var here = Path.GetDirectoryName(typeof(WpfAppFixture).Assembly.Location)!;
-        var candidates = new[]
-        {
-            Path.Combine(here, "WpfInspector.App.exe"),
-            FindInParents(here, Path.Combine("src", "WpfInspector.App", "bin", "Release", "net9.0-windows", "WpfInspector.App.exe")),
-            FindInParents(here, Path.Combine("src", "WpfInspector.App", "bin", "Debug", "net9.0-windows", "WpfInspector.App.exe")),
-        };
+        var configurations = GetPreferredConfigurations(here);
+        var candidates = configurations
+            .Select(configuration => FindInParents(
+                here,
+                Path.Combine("src", "WpfInspector.App", "bin", configuration, "net9.0-windows", "WpfInspector.App.exe")))
+            .Concat(
+            [
+                Path.Combine(here, "WpfInspector.App.exe")
+            ])
+            .ToArray();
 
         return candidates.FirstOrDefault(File.Exists)
             ?? throw new FileNotFoundException("WpfInspector.App.exe が見つかりません。先に 'dotnet build' を実行してください。");
+    }
+
+    private static IReadOnlyList<string> GetPreferredConfigurations(string path)
+    {
+        var segments = path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var configuration = segments.FirstOrDefault(segment =>
+            string.Equals(segment, "Debug", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(segment, "Release", StringComparison.OrdinalIgnoreCase));
+
+        if (string.Equals(configuration, "Release", StringComparison.OrdinalIgnoreCase))
+        {
+            return ["Release", "Debug"];
+        }
+
+        return ["Debug", "Release"];
     }
 
     private static string? FindInParents(string start, string relative)
@@ -234,6 +271,21 @@ public sealed class WpfAppFixture : IAsyncLifetime
                 TreeScope.Descendants,
                 new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.DataItem));
             return items.Count;
+        }
+        catch
+        {
+            return -1;
+        }
+    }
+
+    private int TryGetTreeItemCount()
+    {
+        try
+        {
+            var treeItems = GetMainWindow().FindAll(
+                TreeScope.Descendants,
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TreeItem));
+            return treeItems.Count;
         }
         catch
         {

@@ -14,7 +14,13 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
-  <Target Name="BuildWpfInspectorApp" AfterTargets="Build">
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\WpfInspector.App\WpfInspector.App.csproj" />
+    <ProjectReference Include="..\..\src\WpfInspector.InspectionPayload\WpfInspector.InspectionPayload.csproj" />
+    <ProjectReference Include="..\..\src\WpfInspector.TestHelper\WpfInspector.TestHelper.csproj" />
+  </ItemGroup>
+
+  <Target Name="BuildWpfInspectorApp" AfterTargets="Build" Condition="'$(SkipBuildWpfInspectorApp)' != 'true'">
     <MSBuild Projects="$(MSBuildThisFileDirectory)..\..\src\WpfInspector.App\WpfInspector.App.csproj"
              Targets="Build"
              Properties="Configuration=$(Configuration)" />

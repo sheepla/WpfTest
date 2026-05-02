@@ -13,6 +13,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\WpfInspector.TestHelper\Protocol\PipeProtocol.cs" Link="Protocol\PipeProtocol.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="ModelContextProtocol" Version="1.2.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.*" />
   </ItemGroup>

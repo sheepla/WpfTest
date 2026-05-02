@@ -10,6 +10,55 @@
     <ProjectReference Include="..\WpfInspector.Injector\WpfInspector.Injector.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\WpfInspector.TestHelper\Protocol\PipeProtocol.cs" Link="Protocol\PipeProtocol.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Anthropic.SDK" Version="*" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="$(MSBuildThisFileDirectory)..\WpfInspector.NativeBootstrap\x64\Debug\WpfInspector.NativeBootstrap.dll"
+             Condition="Exists('$(MSBuildThisFileDirectory)..\WpfInspector.NativeBootstrap\x64\Debug\WpfInspector.NativeBootstrap.dll')"
+             CopyToOutputDirectory="PreserveNewest"
+             Link="WpfInspector.NativeBootstrap.dll" />
+    <Content Include="$(MSBuildThisFileDirectory)..\WpfInspector.NativeBootstrap\x64\Release\WpfInspector.NativeBootstrap.dll"
+             Condition="Exists('$(MSBuildThisFileDirectory)..\WpfInspector.NativeBootstrap\x64\Release\WpfInspector.NativeBootstrap.dll')"
+             CopyToOutputDirectory="PreserveNewest"
+             Link="WpfInspector.NativeBootstrap.dll" />
+  </ItemGroup>
+
+  <Target Name="CopyTestHelper" AfterTargets="Build">
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.TestHelper\WpfInspector.TestHelper.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration)" />
+    <ItemGroup>
+      <_TestHelperFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.TestHelper\bin\$(Configuration)\net9.0-windows\WpfInspector.TestHelper.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_TestHelperFiles)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+    <WriteLinesToFile
+      File="$(OutputPath)WpfInspector.TestHelper.runtimeconfig.json"
+      Lines='{
+  "runtimeOptions": {
+    "tfm": "net9.0",
+    "rollForward": "LatestMinor",
+    "frameworks": [
+      {
+        "name": "Microsoft.NETCore.App",
+        "version": "9.0.0"
+      }
+    ]
+  }
+}'
+      Overwrite="true" Encoding="UTF-8" />
+  </Target>
+
+  <Target Name="CopyInspectionPayload" AfterTargets="Build">
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.InspectionPayload\WpfInspector.InspectionPayload.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration)" />
+    <ItemGroup>
+      <_PayloadFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.InspectionPayload\bin\$(Configuration)\net9.0-windows\WpfInspector.InspectionPayload.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_PayloadFiles)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+  </Target>
 </Project>

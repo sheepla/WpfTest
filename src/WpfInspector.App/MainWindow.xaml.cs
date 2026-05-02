@@ -1,27 +1,38 @@
 using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using WpfInspector.App.Services;
 using WpfInspector.App.ViewModels;
+using WpfInspector.Core.Models;
 using WpfInspector.Core.Services;
 
 namespace WpfInspector.App;
 
 public partial class MainWindow : Window
 {
+    private bool _fixturesInitialized;
+
     private MainViewModel ViewModel => (MainViewModel)DataContext;
 
     public MainWindow()
     {
         InitializeComponent();
-        DataContext = new MainViewModel(
+
+        var viewModel = new MainViewModel(
             new ProcessInspectionService(new PeMetadataService()),
             new PortablePdbAnalysisService(),
             new WpfInjectionService());
+
+        viewModel.FixtureLab.ResourcePaletteChanged += FixtureLab_OnResourcePaletteChanged;
+        DataContext = viewModel;
+
+        ApplyFixturePalette(viewModel.FixtureLab.ActivePalette);
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
+        InitializeFixtureSurfaces();
         await ViewModel.RefreshProcessesAsync();
         await ViewModel.LoadSelectedProcessAsync();
     }
@@ -78,5 +89,40 @@ public partial class MainWindow : Window
     private async void InjectButton_OnClick(object sender, RoutedEventArgs e)
     {
         await ViewModel.AnalyzeSelectedWpfAsync();
+    }
+
+    private void InspectionTree_OnSelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
+    {
+        ViewModel.SelectInspectedElement(e.NewValue as WpfElementInfo);
+    }
+
+    private void FixtureLab_OnResourcePaletteChanged(object? sender, ResourcePaletteChangedEventArgs e)
+    {
+        ApplyFixturePalette(e.Palette);
+    }
+
+    private void InitializeFixtureSurfaces()
+    {
+        if (_fixturesInitialized)
+        {
+            return;
+        }
+
+        _fixturesInitialized = true;
+        ValidationFixtureTextBox.Text = "bad";
+        ValidationFixtureTextBox.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
+    }
+
+    private void ApplyFixturePalette(ResourcePalette palette)
+    {
+        var (accent, surface) = palette switch
+        {
+            ResourcePalette.Alert => (Color.FromRgb(0xA7, 0x2E, 0x1B), Color.FromRgb(0xFE, 0xF1, 0xEB)),
+            ResourcePalette.Forest => (Color.FromRgb(0x1D, 0x6B, 0x44), Color.FromRgb(0xEB, 0xF7, 0xEF)),
+            _ => (Color.FromRgb(0x0F, 0x6C, 0xBD), Color.FromRgb(0xEB, 0xF3, 0xFF))
+        };
+
+        Resources["FixtureAccentBrush"] = new SolidColorBrush(accent);
+        Resources["FixtureSurfaceBrush"] = new SolidColorBrush(surface);
     }
 }

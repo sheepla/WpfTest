@@ -55,14 +55,30 @@ public sealed class MainWindowTests : IAsyncLifetime
     [Fact]
     public async Task Analyze_button_runs_against_self_process()
     {
-        _fixture.ClickButton("AnalyzeSelectedWpfButton");
-
-        var status = await _fixture.WaitForStatusAsync(
-            TimeSpan.FromSeconds(30),
-            "UI 走査と PDB 解析が完了しました",
-            "UI 走査は完了しましたが");
+        var status = await AnalyzeSelfAsync();
 
         Assert.Contains("UI 走査", status, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Analyze_button_populates_runtime_assembly_summary_for_self_process()
+    {
+        await AnalyzeSelfAsync();
+
+        var summary = await _fixture.WaitForTextContainingAsync(TimeSpan.FromSeconds(10), "[Window]");
+        Assert.Contains("WpfInspector.App", summary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Analyze_button_populates_window_summary_and_tree_for_self_process()
+    {
+        await AnalyzeSelfAsync();
+
+        var windowSummary = await _fixture.WaitForTextContainingAsync(TimeSpan.FromSeconds(10), "WpfInspector |");
+        Assert.Contains("Normal", windowSummary, StringComparison.Ordinal);
+
+        var treeItemCount = await _fixture.WaitForTreeItemCountAsync(TimeSpan.FromSeconds(10), 1);
+        Assert.True(treeItemCount > 0, $"TreeView の項目数が 0 です: {treeItemCount}");
     }
 
     [Fact]
@@ -84,5 +100,15 @@ public sealed class MainWindowTests : IAsyncLifetime
             "UI 走査は完了しましたが");
 
         Assert.Contains("UI 走査", status, StringComparison.Ordinal);
+    }
+
+    private async Task<string> AnalyzeSelfAsync()
+    {
+        _fixture.ClickButton("AnalyzeSelectedWpfButton");
+
+        return await _fixture.WaitForStatusAsync(
+            TimeSpan.FromSeconds(30),
+            "UI 走査と PDB 解析が完了しました",
+            "UI 走査は完了しましたが");
     }
 }
