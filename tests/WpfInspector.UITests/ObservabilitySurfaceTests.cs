@@ -165,6 +165,53 @@ public sealed class ObservabilitySurfaceTests(InProcessWpfAppFixture fixture) : 
     }
 
     [Fact]
+    public async Task Rpc_surface_supports_full_snapshot_and_element_search()
+    {
+        var inspection = await _fixture.SendSuccessfulObjectAsync("get_inspection_result");
+        Assert.Equal(WpfInspectionSchema.CurrentVersion, GetRequiredString(inspection, "SchemaVersion"));
+        Assert.NotNull(inspection["Dispatcher"]);
+        var windows = GetRequiredArray(inspection, "Windows")
+            .OfType<JsonObject>()
+            .ToList();
+        Assert.Contains(windows, window => GetRequiredString(window, "Title") == "WpfInspector");
+
+        var validationSearch = await _fixture.SendSuccessfulObjectAsync(
+            "find_elements",
+            new
+            {
+                query = "ValidationFixtureTextBox",
+                hasValidationError = true,
+                matchMode = "equals",
+                maxResults = 5
+            });
+        Assert.True(GetRequiredInt32(validationSearch, "TotalMatchCount") >= 1);
+        var validationMatches = GetRequiredArray(validationSearch, "Elements")
+            .OfType<JsonObject>()
+            .ToList();
+        Assert.Contains(
+            validationMatches,
+            match =>
+                GetRequiredString(match, "Name") == "ValidationFixtureTextBox" &&
+                GetRequiredBoolean(match, "HasValidationError"));
+
+        var prioritySearch = await _fixture.SendSuccessfulObjectAsync(
+            "find_elements",
+            new
+            {
+                bindingPath = "PriorityFallbackValue",
+                typeName = "TextBlock",
+                maxResults = 5
+            });
+        Assert.True(GetRequiredInt32(prioritySearch, "TotalMatchCount") >= 1);
+        var priorityMatches = GetRequiredArray(prioritySearch, "Elements")
+            .OfType<JsonObject>()
+            .ToList();
+        Assert.Contains(
+            priorityMatches,
+            match => GetRequiredString(match, "Name") == "PriorityBindingFixtureText");
+    }
+
+    [Fact]
     public async Task Rpc_surface_supports_selection_wait_trace_and_idle_operations()
     {
         var traceStart = await _fixture.SendSuccessfulObjectAsync("start_trace");

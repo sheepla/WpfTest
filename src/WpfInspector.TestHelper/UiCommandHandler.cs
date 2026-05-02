@@ -16,6 +16,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using WpfInspector.Core.Models;
 using WpfInspector.InspectionPayload;
 using WpfInspector.Protocol;
 
@@ -133,6 +134,10 @@ internal static class UiCommandHandler
     {
         switch (request.Operation)
         {
+            case "get_inspection_result":
+                return BuildInspectionResultResponse(request);
+            case "find_elements":
+                return BuildFindElementsResponse(request);
             case "get_element_details":
                 return BuildElementDetailsResponse(request);
             case "get_binding_details":
@@ -224,6 +229,108 @@ internal static class UiCommandHandler
             data: JsonSerializer.SerializeToNode(new ElementDetailsEnvelope(
                 elementName,
                 details!),
+                JsonOptions),
+            requestId: request.RequestId);
+    }
+
+    private static PipeResponse BuildInspectionResultResponse(PipeRequest request)
+    {
+        var inspection = SelfInspection.InspectCurrentProcess();
+        return PipeProtocol.Success(
+            data: JsonSerializer.SerializeToNode(inspection, JsonOptions),
+            requestId: request.RequestId);
+    }
+
+    private static PipeResponse BuildFindElementsResponse(PipeRequest request)
+    {
+        var query = GetOptionalStringArgument(request, "query");
+        var typeName = GetOptionalStringArgument(request, "typeName");
+        var propertyName = GetOptionalStringArgument(request, "propertyName");
+        var bindingPath = GetOptionalStringArgument(request, "bindingPath");
+        var ownerWindowTitle = GetOptionalStringArgument(request, "ownerWindowTitle");
+        var isVisible = GetOptionalBooleanArgument(request, "isVisible");
+        var isEnabled = GetOptionalBooleanArgument(request, "isEnabled");
+        var hasValidationError = GetOptionalBooleanArgument(request, "hasValidationError");
+        var hasCommand = GetOptionalBooleanArgument(request, "hasCommand");
+        var includeReferences = GetOptionalBooleanArgument(request, "includeReferences") ?? false;
+        var maxResults = Math.Clamp(GetOptionalIntArgument(request, "maxResults") ?? 25, 1, 200);
+        var matchMode = NormalizeElementSearchMatchMode(GetOptionalStringArgument(request, "matchMode"));
+
+        var hasCriteria =
+            !string.IsNullOrWhiteSpace(query) ||
+            !string.IsNullOrWhiteSpace(typeName) ||
+            !string.IsNullOrWhiteSpace(propertyName) ||
+            !string.IsNullOrWhiteSpace(bindingPath) ||
+            !string.IsNullOrWhiteSpace(ownerWindowTitle) ||
+            isVisible is not null ||
+            isEnabled is not null ||
+            hasValidationError is not null ||
+            hasCommand is not null;
+        if (!hasCriteria)
+        {
+            return PipeProtocol.Error(
+                errorCode: "invalid_arguments",
+                errorMessage: "Provide at least one search criterion.",
+                requestId: request.RequestId);
+        }
+
+        var criteria = new FindElementsCriteria(
+            Query: query,
+            MatchMode: matchMode,
+            TypeName: typeName,
+            PropertyName: propertyName,
+            BindingPath: bindingPath,
+            OwnerWindowTitle: ownerWindowTitle,
+            IsVisible: isVisible,
+            IsEnabled: isEnabled,
+            HasValidationError: hasValidationError,
+            HasCommand: hasCommand,
+            IncludeReferences: includeReferences,
+            MaxResults: maxResults);
+        var inspection = SelfInspection.InspectCurrentProcess();
+        var matches = new List<FoundElementSummary>();
+        var scannedElementCount = 0;
+        var totalMatchCount = 0;
+
+        foreach (var window in inspection.Windows)
+        {
+            if (window.RootElement is null)
+            {
+                continue;
+            }
+
+            foreach (var element in EnumerateElements(window.RootElement))
+            {
+                scannedElementCount++;
+
+                if (!criteria.IncludeReferences && element.IsReference)
+                {
+                    continue;
+                }
+
+                if (!MatchesElementSearchCriteria(element, window, criteria, out var matchedFields))
+                {
+                    continue;
+                }
+
+                totalMatchCount++;
+                if (matches.Count >= criteria.MaxResults)
+                {
+                    continue;
+                }
+
+                matches.Add(BuildFoundElementSummary(window, element, matchedFields));
+            }
+        }
+
+        return PipeProtocol.Success(
+            data: JsonSerializer.SerializeToNode(
+                new FindElementsResult(
+                    Criteria: criteria,
+                    ScannedElementCount: scannedElementCount,
+                    TotalMatchCount: totalMatchCount,
+                    Truncated: totalMatchCount > matches.Count,
+                    Elements: matches),
                 JsonOptions),
             requestId: request.RequestId);
     }
@@ -1401,6 +1508,20 @@ internal static class UiCommandHandler
         };
     }
 
+    private static string NormalizeElementSearchMatchMode(string? matchMode)
+    {
+        if (string.IsNullOrWhiteSpace(matchMode))
+        {
+            return "contains";
+        }
+
+        return NormalizeMatchMode(matchMode) switch
+        {
+            "equals" or "contains" or "starts_with" or "ends_with" => NormalizeMatchMode(matchMode),
+            _ => "contains"
+        };
+    }
+
     private static ConditionEvaluationResult EvaluateCondition(
         string elementName,
         string propertyName,
@@ -1577,6 +1698,256 @@ internal static class UiCommandHandler
             "exists" => !string.IsNullOrWhiteSpace(actual),
             _ => string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase)
         };
+    }
+
+    private static IEnumerable<WpfElementInfo> EnumerateElements(WpfElementInfo root)
+    {
+        yield return root;
+
+        foreach (var child in root.Children)
+        {
+            foreach (var descendant in EnumerateElements(child))
+            {
+                yield return descendant;
+            }
+        }
+    }
+
+    private static bool MatchesElementSearchCriteria(
+        WpfElementInfo element,
+        WpfWindowInfo ownerWindow,
+        FindElementsCriteria criteria,
+        out List<string> matchedFields)
+    {
+        matchedFields = [];
+
+        if (!string.IsNullOrWhiteSpace(criteria.Query))
+        {
+            var queryMatched =
+                TryMatchSearchField(element.Name, criteria.Query, criteria.MatchMode, matchedFields, "Name") |
+                TryMatchSearchField(element.AutomationId, criteria.Query, criteria.MatchMode, matchedFields, "AutomationId") |
+                TryMatchSearchField(element.StableId, criteria.Query, criteria.MatchMode, matchedFields, "StableId") |
+                TryMatchSearchField(element.Text, criteria.Query, criteria.MatchMode, matchedFields, "Text");
+            if (!queryMatched)
+            {
+                return false;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(criteria.TypeName))
+        {
+            var typeMatched =
+                TryMatchSearchField(element.TypeName, criteria.TypeName, criteria.MatchMode, matchedFields, "TypeName") |
+                TryMatchSearchField(element.FullTypeName, criteria.TypeName, criteria.MatchMode, matchedFields, "FullTypeName");
+            if (!typeMatched)
+            {
+                return false;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(criteria.PropertyName))
+        {
+            var propertyMatched = element.ObservedProperties.Any(property =>
+                MatchesConditionValue(property.PropertyName, criteria.PropertyName, criteria.MatchMode));
+            if (!propertyMatched)
+            {
+                return false;
+            }
+
+            AddMatchedField(matchedFields, "PropertyName");
+        }
+
+        if (!string.IsNullOrWhiteSpace(criteria.BindingPath))
+        {
+            var bindingMatched = element.ObservedProperties.Any(property =>
+                HasMatchingBindingPath(property.Binding, criteria.BindingPath, criteria.MatchMode));
+            if (!bindingMatched)
+            {
+                return false;
+            }
+
+            AddMatchedField(matchedFields, "BindingPath");
+        }
+
+        if (!string.IsNullOrWhiteSpace(criteria.OwnerWindowTitle))
+        {
+            if (!MatchesConditionValue(ownerWindow.Title, criteria.OwnerWindowTitle, criteria.MatchMode))
+            {
+                return false;
+            }
+
+            AddMatchedField(matchedFields, "OwnerWindowTitle");
+        }
+
+        if (criteria.IsVisible is { } isVisible)
+        {
+            if (element.IsVisible != isVisible)
+            {
+                return false;
+            }
+
+            AddMatchedField(matchedFields, "IsVisible");
+        }
+
+        if (criteria.IsEnabled is { } isEnabled)
+        {
+            if (element.IsEnabled != isEnabled)
+            {
+                return false;
+            }
+
+            AddMatchedField(matchedFields, "IsEnabled");
+        }
+
+        if (criteria.HasValidationError is { } hasValidationError)
+        {
+            if ((element.Validation?.HasError ?? false) != hasValidationError)
+            {
+                return false;
+            }
+
+            AddMatchedField(matchedFields, "HasValidationError");
+        }
+
+        if (criteria.HasCommand is { } hasCommand)
+        {
+            if ((element.Command is not null) != hasCommand)
+            {
+                return false;
+            }
+
+            AddMatchedField(matchedFields, "HasCommand");
+        }
+
+        return matchedFields.Count > 0;
+    }
+
+    private static bool TryMatchSearchField(
+        string? actualValue,
+        string? expectedValue,
+        string matchMode,
+        List<string> matchedFields,
+        string fieldName)
+    {
+        if (string.IsNullOrWhiteSpace(expectedValue) ||
+            !MatchesConditionValue(actualValue, expectedValue, matchMode))
+        {
+            return false;
+        }
+
+        AddMatchedField(matchedFields, fieldName);
+        return true;
+    }
+
+    private static bool HasMatchingBindingPath(WpfBindingInfo? binding, string expectedValue, string matchMode)
+    {
+        if (binding is null)
+        {
+            return false;
+        }
+
+        if (MatchesConditionValue(binding.Path, expectedValue, matchMode) ||
+            MatchesConditionValue(binding.XPath, expectedValue, matchMode))
+        {
+            return true;
+        }
+
+        return binding.ChildBindings.Any(child => HasMatchingBindingPath(child, expectedValue, matchMode));
+    }
+
+    private static FoundElementSummary BuildFoundElementSummary(
+        WpfWindowInfo ownerWindow,
+        WpfElementInfo element,
+        List<string> matchedFields)
+    {
+        var observedPropertyNames = element.ObservedProperties
+            .Select(property => property.PropertyName)
+            .Where(propertyName => !string.IsNullOrWhiteSpace(propertyName))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(propertyName => propertyName, StringComparer.OrdinalIgnoreCase)
+            .Take(20)
+            .ToList();
+        var bindingPaths = EnumerateBindingPaths(element)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .Take(20)
+            .ToList();
+
+        return new FoundElementSummary(
+            TypeName: element.TypeName,
+            FullTypeName: element.FullTypeName,
+            Name: NormalizeOptionalText(element.Name),
+            AutomationId: NormalizeOptionalText(element.AutomationId),
+            StableId: element.StableId,
+            Text: NormalizeOptionalText(element.Text),
+            DataContextTypeName: element.DataContextTypeName,
+            OwnerWindowTitle: ownerWindow.Title,
+            OwnerWindowStableId: ownerWindow.StableId,
+            VisualPath: element.VisualPath,
+            LogicalPath: element.LogicalPath,
+            IsVisible: element.IsVisible,
+            IsEnabled: element.IsEnabled,
+            IsLoaded: element.IsLoaded,
+            HasValidationError: element.Validation?.HasError == true,
+            ValidationErrors: element.Validation?.Errors ?? [],
+            HasCommand: element.Command is not null,
+            CommandTypeName: element.Command?.CommandTypeName,
+            CommandCanExecute: element.Command?.CanExecute,
+            ItemCount: element.ItemsControl?.ItemCount,
+            InteropBoundaryKind: element.InteropBoundary?.BoundaryKind,
+            IsReference: element.IsReference,
+            ReferenceReason: element.ReferenceReason,
+            ObservedPropertyNames: observedPropertyNames,
+            BindingPaths: bindingPaths,
+            MatchedFields: matchedFields);
+    }
+
+    private static IEnumerable<string> EnumerateBindingPaths(WpfElementInfo element)
+    {
+        foreach (var property in element.ObservedProperties)
+        {
+            foreach (var bindingPath in EnumerateBindingPaths(property.Binding))
+            {
+                yield return bindingPath;
+            }
+        }
+    }
+
+    private static IEnumerable<string> EnumerateBindingPaths(WpfBindingInfo? binding)
+    {
+        if (binding is null)
+        {
+            yield break;
+        }
+
+        if (!string.IsNullOrWhiteSpace(binding.Path))
+        {
+            yield return binding.Path;
+        }
+
+        if (!string.IsNullOrWhiteSpace(binding.XPath))
+        {
+            yield return binding.XPath;
+        }
+
+        foreach (var child in binding.ChildBindings)
+        {
+            foreach (var bindingPath in EnumerateBindingPaths(child))
+            {
+                yield return bindingPath;
+            }
+        }
+    }
+
+    private static string? NormalizeOptionalText(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
+
+    private static void AddMatchedField(List<string> matchedFields, string fieldName)
+    {
+        if (!matchedFields.Contains(fieldName, StringComparer.Ordinal))
+        {
+            matchedFields.Add(fieldName);
+        }
     }
 
     private static ElementDetails BuildElementDetails(DependencyObject element)
@@ -1914,6 +2285,27 @@ internal static class UiCommandHandler
 
         if (node is JsonValue jsonString && jsonString.TryGetValue<string>(out var stringValue) &&
             int.TryParse(stringValue, out var parsed))
+        {
+            return parsed;
+        }
+
+        return null;
+    }
+
+    private static bool? GetOptionalBooleanArgument(PipeRequest request, string name)
+    {
+        if (!request.Arguments.TryGetPropertyValue(name, out var node) || node is null)
+        {
+            return null;
+        }
+
+        if (node is JsonValue jsonValue && jsonValue.TryGetValue<bool>(out var boolValue))
+        {
+            return boolValue;
+        }
+
+        if (node is JsonValue jsonString && jsonString.TryGetValue<string>(out var stringValue) &&
+            bool.TryParse(stringValue, out var parsed))
         {
             return parsed;
         }
@@ -2633,6 +3025,55 @@ internal static class UiCommandHandler
         string RequestedElement,
         string? PropertyName,
         List<BindingDetails> Bindings);
+
+    private sealed record FindElementsCriteria(
+        string? Query,
+        string MatchMode,
+        string? TypeName,
+        string? PropertyName,
+        string? BindingPath,
+        string? OwnerWindowTitle,
+        bool? IsVisible,
+        bool? IsEnabled,
+        bool? HasValidationError,
+        bool? HasCommand,
+        bool IncludeReferences,
+        int MaxResults);
+
+    private sealed record FindElementsResult(
+        FindElementsCriteria Criteria,
+        int ScannedElementCount,
+        int TotalMatchCount,
+        bool Truncated,
+        List<FoundElementSummary> Elements);
+
+    private sealed record FoundElementSummary(
+        string TypeName,
+        string? FullTypeName,
+        string? Name,
+        string? AutomationId,
+        string? StableId,
+        string? Text,
+        string? DataContextTypeName,
+        string OwnerWindowTitle,
+        string? OwnerWindowStableId,
+        string? VisualPath,
+        string? LogicalPath,
+        bool IsVisible,
+        bool IsEnabled,
+        bool IsLoaded,
+        bool HasValidationError,
+        List<string> ValidationErrors,
+        bool HasCommand,
+        string? CommandTypeName,
+        bool? CommandCanExecute,
+        int? ItemCount,
+        string? InteropBoundaryKind,
+        bool IsReference,
+        string? ReferenceReason,
+        List<string> ObservedPropertyNames,
+        List<string> BindingPaths,
+        List<string> MatchedFields);
 
     private sealed record BindingDetails(
         string BindingKind,

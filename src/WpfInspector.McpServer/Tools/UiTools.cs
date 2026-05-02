@@ -13,6 +13,12 @@ internal sealed class UiTools(WpfSessionManager sessionManager)
     public async Task<string> GetVisualTreeAsync([Description("対象プロセスID")] int pid, CancellationToken ct)
         => await SendCommandAsync(pid, "GET_TREE", ct);
 
+    [McpServerTool(Name = "get_inspection_result"), Description("schema 2.0 の完全なWPF観測スナップショットを取得する")]
+    public async Task<string> GetInspectionResultAsync(
+        [Description("対象プロセスID")] int pid,
+        CancellationToken ct)
+        => await SendRequestAsync(pid, "get_inspection_result", new JsonObject(), ct);
+
     [McpServerTool(Name = "get_window_title"), Description("メインウィンドウのタイトルを取得する")]
     public async Task<string> GetWindowTitleAsync([Description("対象プロセスID")] int pid, CancellationToken ct)
         => await SendCommandAsync(pid, "GET_TITLE", ct);
@@ -90,6 +96,52 @@ internal sealed class UiTools(WpfSessionManager sessionManager)
                 ["elementName"] = elementName
             },
             ct);
+
+    [McpServerTool(Name = "find_elements"), Description("観測スナップショットから条件に一致する要素を検索する")]
+    public async Task<string> FindElementsAsync(
+        [Description("対象プロセスID")] int pid,
+        [Description("Name / AutomationId / stableId / Text を横断して検索する文字列")] string? query,
+        [Description("型名または完全修飾型名")] string? typeName,
+        [Description("ObservedProperties 内の DependencyProperty 名")] string? propertyName,
+        [Description("Binding.Path / XPath")] string? bindingPath,
+        [Description("所有ウィンドウのタイトル")] string? ownerWindowTitle,
+        [Description("表示状態で絞り込む")] bool? isVisible,
+        [Description("有効状態で絞り込む")] bool? isEnabled,
+        [Description("Validation エラーの有無で絞り込む")] bool? hasValidationError,
+        [Description("Command の有無で絞り込む")] bool? hasCommand,
+        [Description("参照ノード(IsReference)も含める")] bool? includeReferences,
+        [Description("比較方法。equals/contains/starts_with/ends_with")] string? matchMode,
+        [Description("最大返却件数。既定 25")] int? maxResults,
+        CancellationToken ct)
+    {
+        var arguments = new JsonObject();
+        if (!string.IsNullOrWhiteSpace(query))
+            arguments["query"] = query;
+        if (!string.IsNullOrWhiteSpace(typeName))
+            arguments["typeName"] = typeName;
+        if (!string.IsNullOrWhiteSpace(propertyName))
+            arguments["propertyName"] = propertyName;
+        if (!string.IsNullOrWhiteSpace(bindingPath))
+            arguments["bindingPath"] = bindingPath;
+        if (!string.IsNullOrWhiteSpace(ownerWindowTitle))
+            arguments["ownerWindowTitle"] = ownerWindowTitle;
+        if (isVisible is not null)
+            arguments["isVisible"] = isVisible.Value;
+        if (isEnabled is not null)
+            arguments["isEnabled"] = isEnabled.Value;
+        if (hasValidationError is not null)
+            arguments["hasValidationError"] = hasValidationError.Value;
+        if (hasCommand is not null)
+            arguments["hasCommand"] = hasCommand.Value;
+        if (includeReferences is not null)
+            arguments["includeReferences"] = includeReferences.Value;
+        if (!string.IsNullOrWhiteSpace(matchMode))
+            arguments["matchMode"] = matchMode;
+        if (maxResults is not null)
+            arguments["maxResults"] = maxResults.Value;
+
+        return await SendRequestAsync(pid, "find_elements", arguments, ct);
+    }
 
     [McpServerTool(Name = "list_popups"), Description("現在の Popup / ContextMenu / ToolTip を列挙する")]
     public async Task<string> ListPopupsAsync(

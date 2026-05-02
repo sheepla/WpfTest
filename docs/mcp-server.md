@@ -138,7 +138,7 @@ UI 操作系ツールはすべて `inject_and_connect` による接続確立後�
 
 #### `get_visual_tree`
 
-ビジュアルツリーを走査して結果を返します。
+完全な WPF 観測スナップショットを返します。名称は互換性のため `get_visual_tree` のままですが、実際の返り値は単純な tree dump ではなく `schema 2.0` の `WpfInspectionResult` です。
 
 | 引数 | 型 | 必須 | 説明 |
 |---|---|---|---|
@@ -148,16 +148,76 @@ UI 操作系ツールはすべて `inject_and_connect` による接続確立後�
 
 ```json
 {
-  "pid": 1234,
-  "windows": ["MainWindow"],
-  "root_element": "Window",
-  "tree": {
-    "type": "Window",
-    "name": "MainWindow",
-    "children": [
-      { "type": "Grid", "name": "", "children": [] }
-    ]
-  }
+  "schemaVersion": "2.0",
+  "processId": 1234,
+  "dispatcherState": "Running",
+  "windows": [
+    {
+      "title": "MainWindow",
+      "stableId": "window:0",
+      "rootElement": {
+        "typeName": "Window",
+        "stableId": "window:0|v:0",
+        "observedProperties": [],
+        "children": []
+      }
+    }
+  ]
+}
+```
+
+#### `get_inspection_result`
+
+`get_visual_tree` と同じ完全観測スナップショットを、意図が明確な名前で取得します。新規実装ではこちらの利用を推奨します。
+
+| 引数 | 型 | 必須 | 説明 |
+|---|---|---|---|
+| `pid` | int | 必須 | 対象プロセス ID |
+
+#### `find_elements`
+
+観測スナップショットを走査し、条件に一致する要素だけを要約して返します。巨大なツリー全体を LLM に読ませず、対象候補の stable id を絞り込む用途を想定しています。
+
+| 引数 | 型 | 必須 | 説明 |
+|---|---|---|---|
+| `pid` | int | 必須 | 対象プロセス ID |
+| `query` | string | 任意 | `Name` / `AutomationId` / `stableId` / `Text` を横断検索する文字列 |
+| `type_name` | string | 任意 | 型名または完全修飾型名 |
+| `property_name` | string | 任意 | `ObservedProperties` 内の DependencyProperty 名 |
+| `binding_path` | string | 任意 | `Binding.Path` / `XPath` |
+| `owner_window_title` | string | 任意 | 所有ウィンドウのタイトル |
+| `is_visible` | bool | 任意 | 表示状態で絞り込む |
+| `is_enabled` | bool | 任意 | 有効状態で絞り込む |
+| `has_validation_error` | bool | 任意 | Validation エラーの有無で絞り込む |
+| `has_command` | bool | 任意 | Command の有無で絞り込む |
+| `include_references` | bool | 任意 | `IsReference` ノードも含める |
+| `match_mode` | string | 任意（既定: `contains`） | `equals` / `contains` / `starts_with` / `ends_with` |
+| `max_results` | int | 任意（既定: 25） | 最大返却件数。1-200 |
+
+戻り値（JSON の例）:
+
+```json
+{
+  "criteria": {
+    "query": "Refresh",
+    "matchMode": "contains",
+    "maxResults": 25
+  },
+  "scannedElementCount": 184,
+  "totalMatchCount": 2,
+  "truncated": false,
+  "elements": [
+    {
+      "typeName": "Button",
+      "name": "RefreshButton",
+      "stableId": "window:0|v:0/1/3",
+      "ownerWindowTitle": "MainWindow",
+      "isVisible": true,
+      "isEnabled": true,
+      "hasCommand": true,
+      "matchedFields": ["Name"]
+    }
+  ]
 }
 ```
 
@@ -361,19 +421,22 @@ dotnet publish src/WpfInspector.McpServer `
 3. inject_and_connect(pid: 1234)
    → DLL を注入し、パイプ接続を確立する
 
-4. get_visual_tree(pid: 1234)
-   → UI ツリーを走査して要素名・階層を把握する
+4. get_inspection_result(pid: 1234)
+   → stable id、binding、validation、command を含む完全観測スナップショットを取得する
 
-5. click_button(pid: 1234, button_name: "Refresh")
+5. find_elements(pid: 1234, query: "Refresh", type_name: "Button")
+   → 候補要素を要約一覧で絞り込み、stable id を得る
+
+6. click_button(pid: 1234, button_name: "Refresh")
    → ボタンをクリックしてデータを更新する
 
-6. get_data_grid_item_count(pid: 1234, grid_name: "ProcessesGrid")
+7. get_data_grid_item_count(pid: 1234, grid_name: "ProcessesGrid")
    → 行数が増えていることを確認する
 
-7. analyze_pdb(pdb_path: "C:\\MyApp\\MyWpfApp.pdb", assembly_path: "C:\\MyApp\\MyWpfApp.dll")
+8. analyze_pdb(pdb_path: "C:\\MyApp\\MyWpfApp.pdb", assembly_path: "C:\\MyApp\\MyWpfApp.dll")
    → ソース構成・メソッド数・シーケンスポイントを解析する
 
-8. disconnect(pid: 1234)
+9. disconnect(pid: 1234)
    → セッションを終了する
 ```
 
