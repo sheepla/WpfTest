@@ -27,8 +27,8 @@ internal static class UiCommandHandler
     private const int MaxChildren = 40;
     private const int MaxTraceEvents = 2_000;
 
-    private static readonly Lock LogSync = new();
-    private static readonly Lock TraceSync = new();
+    private static readonly object LogSync = new();
+    private static readonly object TraceSync = new();
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = false

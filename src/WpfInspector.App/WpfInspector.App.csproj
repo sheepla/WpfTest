@@ -21,8 +21,11 @@
   <!-- TestHelper をビルドしてアプリ出力へコピー（Bootstrap.c が同フォルダに要求） -->
   <Target Name="CopyTestHelper" AfterTargets="Build">
     <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.TestHelper\WpfInspector.TestHelper.csproj"
-             Targets="Build"
+             Targets="Restore"
              Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.TestHelper\WpfInspector.TestHelper.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration);TargetFramework=net9.0-windows" />
     <ItemGroup>
       <_TestHelperFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.TestHelper\bin\$(Configuration)\net9.0-windows\WpfInspector.TestHelper.*" />
     </ItemGroup>
@@ -59,8 +62,11 @@
           AfterTargets="Build"
           Condition="'$(SkipCopyInspectionPayload)' != 'true'">
     <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.InspectionPayload\WpfInspector.InspectionPayload.csproj"
-             Targets="Build"
+             Targets="Restore"
              Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.InspectionPayload\WpfInspector.InspectionPayload.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration);TargetFramework=net9.0-windows" />
     <ItemGroup>
       <_PayloadFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.InspectionPayload\bin\$(Configuration)\net9.0-windows\WpfInspector.InspectionPayload.*" />
     </ItemGroup>
@@ -75,6 +81,45 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <CompatibleInjectionTargetFramework>net8.0-windows</CompatibleInjectionTargetFramework>
+    <CompatibleInjectionCoreTargetFramework>net8.0</CompatibleInjectionCoreTargetFramework>
+    <CompatibleInjectionAssetsOutputDir>$(MSBuildThisFileDirectory)bin\$(Configuration)\$(TargetFramework)\InjectionAssets\$(CompatibleInjectionTargetFramework)\</CompatibleInjectionAssetsOutputDir>
   </PropertyGroup>
+
+  <Target Name="CopyCompatibleInjectionAssets"
+          AfterTargets="Build"
+          Condition="'$(SkipCopyInspectionPayload)' != 'true'">
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.TestHelper\WpfInspector.TestHelper.csproj"
+             Targets="Restore"
+             Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.TestHelper\WpfInspector.TestHelper.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration);TargetFramework=$(CompatibleInjectionTargetFramework)" />
+    <MakeDir Directories="$(CompatibleInjectionAssetsOutputDir)" />
+    <ItemGroup>
+      <_CompatibleInjectionFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.TestHelper\bin\$(Configuration)\$(CompatibleInjectionTargetFramework)\WpfInspector.TestHelper.*" />
+      <_CompatibleInjectionFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.InspectionPayload\bin\$(Configuration)\$(CompatibleInjectionTargetFramework)\WpfInspector.InspectionPayload.*" />
+      <_CompatibleInjectionFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.Core\bin\$(Configuration)\$(CompatibleInjectionCoreTargetFramework)\WpfInspector.Core.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_CompatibleInjectionFiles)"
+          DestinationFolder="$(CompatibleInjectionAssetsOutputDir)"
+          SkipUnchangedFiles="true" />
+    <WriteLinesToFile
+      File="$(CompatibleInjectionAssetsOutputDir)WpfInspector.TestHelper.runtimeconfig.json"
+      Lines='{
+  "runtimeOptions": {
+    "tfm": "net8.0",
+    "rollForward": "LatestMajor",
+    "frameworks": [
+      {
+        "name": "Microsoft.NETCore.App",
+        "version": "8.0.0"
+      }
+    ]
+  }
+}'
+      Overwrite="true"
+      Encoding="UTF-8" />
+  </Target>
 
 </Project>

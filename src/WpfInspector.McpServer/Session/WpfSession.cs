@@ -33,6 +33,7 @@ internal sealed class WpfSession : IAsyncDisposable
     public static async Task<WpfSession> CreateAsync(int pid, string baseDirectory, CancellationToken ct = default)
     {
         var nativeDllPath = InjectionAssets.FindNativeBootstrap(baseDirectory);
+        var payloadBaseDirectory = InjectionAssets.ResolveManagedPayloadBaseDirectory(baseDirectory);
 
         var sessionId = Guid.NewGuid().ToString("N");
         var sessionDirectory = Path.Combine(
@@ -51,7 +52,7 @@ internal sealed class WpfSession : IAsyncDisposable
 
         foreach (var fileName in InjectionAssets.ManagedPayloadFiles)
         {
-            var sourcePath = Path.Combine(baseDirectory, fileName);
+            var sourcePath = Path.Combine(payloadBaseDirectory, fileName);
             if (!File.Exists(sourcePath))
             {
                 if (IsRequiredManagedAsset(fileName))

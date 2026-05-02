@@ -1,6 +1,7 @@
 using System.IO;
 using System.IO.Pipes;
 using System.ComponentModel;
+using System.Security.AccessControl;
 using System.Text;
 using System.Text.Json;
 using WpfInspector.Core.Models;
@@ -17,7 +18,8 @@ namespace WpfInspector.App.Services;
 /// </summary>
 public sealed class WpfInjectionService : IWpfInjectionService
 {
-    private static readonly Lock LogSync = new();
+    private static readonly object LogSync = new();
+    private const string PipeSecurityDescriptor = "D:(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;AU)";
 
     private readonly string _baseDirectory;
     private readonly string _nativeDllPath;
@@ -49,12 +51,7 @@ public sealed class WpfInjectionService : IWpfInjectionService
         Log($"InspectAsync start pid={processId} pipe={pipeName} dll={session.NativeBootstrapPath}");
 
         // WpfInspector 側がサーバーを先に立て、TestHelper がクライアントとして接続してくる
-        await using var pipe = new NamedPipeServerStream(
-            pipeName,
-            PipeDirection.InOut,
-            maxNumberOfServerInstances: 1,
-            PipeTransmissionMode.Byte,
-            PipeOptions.Asynchronous);
+        await using var pipe = CreatePipeServer(pipeName);
 
         // 注入実行（サーバー作成後）
         try
@@ -144,9 +141,10 @@ public sealed class WpfInjectionService : IWpfInjectionService
             $"WpfInspector.NativeBootstrap.{sessionId}.dll");
         File.Copy(_nativeDllPath, nativeBootstrapPath, overwrite: true);
 
+        var payloadBaseDirectory = InjectionAssets.ResolveManagedPayloadBaseDirectory(_baseDirectory);
         foreach (var fileName in InjectionAssets.ManagedPayloadFiles)
         {
-            var sourcePath = Path.Combine(_baseDirectory, fileName);
+            var sourcePath = Path.Combine(payloadBaseDirectory, fileName);
             if (!File.Exists(sourcePath))
                 throw new FileNotFoundException($"注入に必要なファイルが見つかりません: {fileName}", sourcePath);
 
@@ -179,6 +177,24 @@ public sealed class WpfInjectionService : IWpfInjectionService
             throw new InvalidOperationException(
                 $"権限レベルが一致しません。対象プロセスは {targetContext.Describe()}、WpfInspector は {currentContext.Describe()} です。WpfInspector を対象と同等以上の権限で起動してください。");
         }
+    }
+
+    private static NamedPipeServerStream CreatePipeServer(string pipeName)
+    {
+        var security = new PipeSecurity();
+        security.SetSecurityDescriptorSddlForm(PipeSecurityDescriptor);
+
+        return NamedPipeServerStreamAcl.Create(
+            pipeName,
+            PipeDirection.InOut,
+            maxNumberOfServerInstances: 1,
+            PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous,
+            inBufferSize: 0,
+            outBufferSize: 0,
+            security,
+            HandleInheritability.None,
+            additionalAccessRights: 0);
     }
 
     private void Log(string message)

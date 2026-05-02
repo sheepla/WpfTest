@@ -2,6 +2,9 @@ namespace WpfInspector.Injector;
 
 public static class InjectionAssets
 {
+    public const string CompatibleManagedPayloadTargetFramework = "net8.0-windows";
+    public const string CompatibleManagedPayloadDirectoryName = "InjectionAssets";
+
     public static readonly string[] ManagedPayloadFiles =
     [
         "WpfInspector.TestHelper.dll",
@@ -12,6 +15,18 @@ public static class InjectionAssets
         "WpfInspector.InspectionPayload.runtimeconfig.json",
         "WpfInspector.Core.dll"
     ];
+
+    public static string ResolveManagedPayloadBaseDirectory(string baseDirectory)
+    {
+        var compatibleAssetsDirectory = Path.Combine(
+            baseDirectory,
+            CompatibleManagedPayloadDirectoryName,
+            CompatibleManagedPayloadTargetFramework);
+
+        return Directory.Exists(compatibleAssetsDirectory)
+            ? compatibleAssetsDirectory
+            : baseDirectory;
+    }
 
     public static string FindNativeBootstrap(string baseDirectory)
     {

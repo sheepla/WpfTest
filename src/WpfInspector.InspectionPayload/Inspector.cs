@@ -252,12 +252,12 @@ public static class Inspector
         }
 
         var observedProperties = BuildObservedProperties(obj, ownerWindowStableId, stableIdMap);
-        var resourceReferences = BuildResourceReferences(observedProperties);
+        var resourceReferences = TryBuild(() => BuildResourceReferences(observedProperties), []);
         var validation = BuildValidationInfo(obj);
-        var resourceDictionaries = BuildResourceDictionaries(obj);
+        var resourceDictionaries = TryBuild(() => BuildResourceDictionaries(obj), []);
         var itemsControlInfo = BuildItemsControlInfo(obj, ownerWindowStableId, stableIdMap);
         var commandInfo = BuildCommandInfo(obj, ownerWindowStableId, stableIdMap);
-        var codeReferences = BuildCodeReferences(obj, ownerWindowStableId, stableIdMap);
+        var codeReferences = TryBuild(() => BuildCodeReferences(obj, ownerWindowStableId, stableIdMap), []);
 
         return new WpfElementInfo(
             TypeName: typeName,
@@ -591,7 +591,14 @@ public static class Inspector
 
         var source = DependencyPropertyHelper.GetValueSource(obj, property);
         var binding = BuildBindingInfo(obj, property);
-        var resource = BuildResourceReference(obj, property, propertyName, value, source);
+        WpfResourceReferenceInfo? resource = null;
+        try
+        {
+            resource = BuildResourceReference(obj, property, propertyName, value, source);
+        }
+        catch
+        {
+        }
         properties.Add(new WpfDependencyPropertyValueInfo(
             PropertyName: propertyName,
             OwnerTypeName: property.OwnerType.Name,
@@ -1026,7 +1033,8 @@ public static class Inspector
                     ? BuildStableIdNote(TryResolveStableId(dependencyObject, ownerWindowStableId, stableIdMap))
                     : null);
 
-            if (frameworkElement.Style is { } style && style.TargetType is { } styleTargetType)
+            var styleTargetType = TryGetStyleTargetType(frameworkElement.Style);
+            if (styleTargetType is not null)
             {
                 AddReference(
                     kind: "StyleTargetType",
@@ -1052,15 +1060,19 @@ public static class Inspector
                     : null);
         }
 
-        if (obj is Control { Template: { } template, Template.TargetType: { } templateTargetType })
+        if (obj is Control { Template: { } template })
         {
-            AddReference(
-                kind: "TemplateTargetType",
-                referencedType: templateTargetType,
-                identifier: templateTargetType.Name,
-                displayName: templateTargetType.FullName,
-                sourceUri: null,
-                notes: template.GetType().FullName);
+            var templateTargetType = TryGetTemplateTargetType(template);
+            if (templateTargetType is not null)
+            {
+                AddReference(
+                    kind: "TemplateTargetType",
+                    referencedType: templateTargetType,
+                    identifier: templateTargetType.Name,
+                    displayName: templateTargetType.FullName,
+                    sourceUri: null,
+                    notes: template.GetType().FullName);
+            }
         }
 
         if (obj is ItemsControl { ItemsSource: not null } itemsControl)
@@ -2066,11 +2078,57 @@ public static class Inspector
         if (property == FrameworkElement.StyleProperty || property == FrameworkContentElement.StyleProperty)
         {
             return value is Style style
-                ? style.TargetType
+                ? TryGetStyleTargetType(style)
                 : obj.GetType();
         }
 
         return null;
+    }
+
+    private static Type? TryGetStyleTargetType(Style? style)
+    {
+        if (style is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return style.TargetType;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static Type? TryGetTemplateTargetType(ControlTemplate? template)
+    {
+        if (template is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return template.TargetType;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static T TryBuild<T>(Func<T> builder, T fallback)
+    {
+        try
+        {
+            return builder();
+        }
+        catch
+        {
+            return fallback;
+        }
     }
 
     private static string ResolveResourceKind(

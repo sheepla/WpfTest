@@ -30,6 +30,7 @@ internal sealed class WpfPipeClient : IAsyncDisposable
     {
         var baseDirectory = AppContext.BaseDirectory;
         var nativeDllPath = InjectionAssets.FindNativeBootstrap(baseDirectory);
+        var payloadBaseDirectory = InjectionAssets.ResolveManagedPayloadBaseDirectory(baseDirectory);
         var sessionId = Guid.NewGuid().ToString("N");
         _sessionDirectory = Path.Combine(
             Path.GetTempPath(),
@@ -46,7 +47,7 @@ internal sealed class WpfPipeClient : IAsyncDisposable
 
         foreach (var fileName in InjectionAssets.ManagedPayloadFiles)
         {
-            var sourcePath = Path.Combine(baseDirectory, fileName);
+            var sourcePath = Path.Combine(payloadBaseDirectory, fileName);
             if (!File.Exists(sourcePath))
             {
                 throw new FileNotFoundException($"注入に必要なファイルが見つかりません: {fileName}", sourcePath);
