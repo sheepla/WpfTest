@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Runtime.Loader;
 using WpfInspector.Core.Models;
 
 namespace WpfInspector.UITests;
@@ -8,7 +9,11 @@ public sealed class ObservabilitySurfaceTests(InProcessWpfAppFixture fixture) : 
 {
     private readonly InProcessWpfAppFixture _fixture = fixture;
 
-    public Task InitializeAsync() => _fixture.ResetAsync();
+    public async Task InitializeAsync()
+    {
+        await _fixture.ReconnectHelperAsync();
+        await _fixture.ResetAsync();
+    }
 
     public Task DisposeAsync() => Task.CompletedTask;
 
@@ -271,6 +276,64 @@ public sealed class ObservabilitySurfaceTests(InProcessWpfAppFixture fixture) : 
         Assert.NotNull(traceStop["Diff"]);
     }
 
+    [Fact]
+    public async Task Injected_worker_unloads_after_disconnect_and_can_reconnect()
+    {
+        var baselineWorkerAssemblyCount = GetWorkerAssemblies().Count;
+        var baselineCollectibleWorkerAssemblyCount = GetWorkerAssemblies()
+            .Count(assembly => AssemblyLoadContext.GetLoadContext(assembly)?.IsCollectible == true);
+        var baselineNonCollectibleWorkerAssemblyCount =
+            baselineWorkerAssemblyCount - baselineCollectibleWorkerAssemblyCount;
+        var baselineCollectibleContextCount = GetCollectibleWorkerContextCount();
+
+        await _fixture.SendSuccessfulObjectAsync("get_inspection_result");
+        await _fixture.DisconnectHelperAsync();
+
+        var idleReached = await _fixture.WaitForHelperIdleAsync(TimeSpan.FromSeconds(10));
+        Assert.True(idleReached, "Collectible helper worker did not become idle before the timeout.");
+
+        var diagnostics = _fixture.GetHelperDiagnostics();
+        Assert.Equal(0, diagnostics.ActiveSessionCount);
+        Assert.True(diagnostics.CompletedSessionCount >= 1);
+        Assert.True(diagnostics.SuccessfulUnloadCount >= 1, diagnostics.LastError);
+        Assert.True(baselineCollectibleWorkerAssemblyCount >= 1);
+        Assert.True(baselineCollectibleContextCount >= 1);
+
+        var unloadObserved = await WaitForWorkerUnloadStateAsync(
+            baselineNonCollectibleWorkerAssemblyCount,
+            TimeSpan.FromSeconds(10));
+        Assert.True(unloadObserved, "Worker assemblies did not fully leave the collectible context before the timeout.");
+
+        await _fixture.ReconnectHelperAsync();
+
+        var inspection = await _fixture.SendSuccessfulObjectAsync("get_inspection_result");
+        Assert.NotNull(inspection["Windows"]);
+    }
+
+    [Fact]
+    public async Task Idle_helper_session_unloads_after_disconnect()
+    {
+        var baselineWorkerAssemblyCount = GetWorkerAssemblies().Count;
+        var baselineCollectibleWorkerAssemblyCount = GetWorkerAssemblies()
+            .Count(assembly => AssemblyLoadContext.GetLoadContext(assembly)?.IsCollectible == true);
+        var baselineNonCollectibleWorkerAssemblyCount =
+            baselineWorkerAssemblyCount - baselineCollectibleWorkerAssemblyCount;
+
+        await _fixture.DisconnectHelperAsync();
+
+        var idleReached = await _fixture.WaitForHelperIdleAsync(TimeSpan.FromSeconds(10));
+        Assert.True(idleReached, "Collectible helper worker did not become idle before the timeout.");
+
+        var unloadObserved = await WaitForWorkerUnloadStateAsync(
+            expectedWorkerAssemblyCount: baselineNonCollectibleWorkerAssemblyCount,
+            timeout: TimeSpan.FromSeconds(10));
+        Assert.True(unloadObserved, "Idle helper session did not unload before the timeout.");
+
+        await _fixture.ReconnectHelperAsync();
+        var inspection = await _fixture.SendSuccessfulObjectAsync("get_inspection_result");
+        Assert.NotNull(inspection["Windows"]);
+    }
+
     private static IEnumerable<WpfElementInfo> EnumerateElements(WpfElementInfo root)
     {
         yield return root;
@@ -282,6 +345,45 @@ public sealed class ObservabilitySurfaceTests(InProcessWpfAppFixture fixture) : 
                 yield return descendant;
             }
         }
+    }
+
+    private static IReadOnlyList<System.Reflection.Assembly> GetWorkerAssemblies() =>
+        AppDomain.CurrentDomain.GetAssemblies()
+            .Where(assembly => string.Equals(
+                assembly.GetName().Name,
+                "WpfInspector.TestRuntime",
+                StringComparison.Ordinal))
+            .ToList();
+
+    private static int GetCollectibleWorkerContextCount() =>
+        AssemblyLoadContext.All.Count(context =>
+            context.IsCollectible &&
+            (context.Name?.StartsWith("WpfInspector.TestRuntime::", StringComparison.Ordinal) ?? false));
+
+    private static async Task<bool> WaitForWorkerUnloadStateAsync(
+        int expectedWorkerAssemblyCount,
+        TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var workerAssemblies = GetWorkerAssemblies();
+            var collectibleAssemblyCount = workerAssemblies
+                .Count(assembly => AssemblyLoadContext.GetLoadContext(assembly)?.IsCollectible == true);
+            if (workerAssemblies.Count == expectedWorkerAssemblyCount
+                && collectibleAssemblyCount == 0
+                && GetCollectibleWorkerContextCount() == 0)
+            {
+                return true;
+            }
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            await Task.Delay(100);
+        }
+
+        return false;
     }
 
     private static WpfElementInfo FindElement(WpfElementInfo root, string identifier) =>

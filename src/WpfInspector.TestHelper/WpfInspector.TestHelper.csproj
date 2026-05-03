@@ -3,15 +3,13 @@
     <TargetFrameworks>net8.0-windows;net9.0-windows</TargetFrameworks>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UseWPF>true</UseWPF>
     <!-- 注入先の WPF プロセスの AssemblyLoadContext にロードされるため
          単一ファイルではなく DLL として出力する -->
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <SelfContained>false</SelfContained>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\WpfInspector.InspectionPayload\WpfInspector.InspectionPayload.csproj" />
+    <Compile Remove="UiCommandHandler.cs" />
   </ItemGroup>
 </Project>

@@ -1,7 +1,5 @@
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
 
 namespace WpfInspector.Protocol;
 
@@ -10,20 +8,77 @@ internal static class PipeProtocol
     internal const string Version = "wpfinspector.rpc.v1";
     private const string Prefix = "RPC:";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    internal static string EncodeRequest(PipeRequest request) =>
+        EncodeNode(new JsonObject
+        {
+            ["Version"] = request.Version,
+            ["RequestId"] = request.RequestId,
+            ["Operation"] = request.Operation,
+            ["Arguments"] = request.Arguments.DeepClone()
+        });
+
+    internal static string EncodeResponse(PipeResponse response) =>
+        EncodeNode(new JsonObject
+        {
+            ["Version"] = response.Version,
+            ["RequestId"] = response.RequestId is null ? null : JsonValue.Create(response.RequestId),
+            ["Success"] = response.Success,
+            ["ErrorCode"] = response.ErrorCode is null ? null : JsonValue.Create(response.ErrorCode),
+            ["ErrorMessage"] = response.ErrorMessage is null ? null : JsonValue.Create(response.ErrorMessage),
+            ["Data"] = response.Data?.DeepClone()
+        });
+
+    internal static bool TryDecodeRequest(string? payload, out PipeRequest? request)
     {
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
+        request = null;
+        if (!TryParseObject(payload, out var json))
+        {
+            return false;
+        }
+        ArgumentNullException.ThrowIfNull(json);
 
-    internal static string EncodeRequest(PipeRequest request) => Encode(request);
+        var operation = json["Operation"]?.GetValue<string>();
+        if (string.IsNullOrWhiteSpace(operation))
+        {
+            return false;
+        }
 
-    internal static string EncodeResponse(PipeResponse response) => Encode(response);
+        request = new PipeRequest
+        {
+            Version = json["Version"]?.GetValue<string>() ?? Version,
+            RequestId = json["RequestId"]?.GetValue<string>() ?? Guid.NewGuid().ToString("N"),
+            Operation = operation,
+            Arguments = json["Arguments"] as JsonObject ?? []
+        };
+        return true;
+    }
 
-    internal static bool TryDecodeRequest(string? payload, out PipeRequest? request) =>
-        TryDecode(payload, out request);
+    internal static bool TryDecodeResponse(string? payload, out PipeResponse? response)
+    {
+        response = null;
+        if (!TryParseObject(payload, out var json))
+        {
+            return false;
+        }
+        ArgumentNullException.ThrowIfNull(json);
 
-    internal static bool TryDecodeResponse(string? payload, out PipeResponse? response) =>
-        TryDecode(payload, out response);
+        var success = json["Success"]?.GetValue<bool>();
+        if (success is null)
+        {
+            return false;
+        }
+
+        response = new PipeResponse
+        {
+            Version = json["Version"]?.GetValue<string>() ?? Version,
+            RequestId = json["RequestId"]?.GetValue<string>(),
+            Success = success.Value,
+            ErrorCode = json["ErrorCode"]?.GetValue<string>(),
+            ErrorMessage = json["ErrorMessage"]?.GetValue<string>(),
+            Data = json["Data"]?.DeepClone()
+        };
+        return true;
+    }
 
     internal static PipeResponse Success(JsonNode? data = null, string? requestId = null) =>
         new()
@@ -44,15 +99,12 @@ internal static class PipeProtocol
         };
 
     internal static string ToJson(JsonNode? node) =>
-        node?.ToJsonString(JsonOptions) ?? "null";
+        node?.ToJsonString() ?? "null";
 
-    private static string Encode<T>(T value)
-    {
-        var json = JsonSerializer.Serialize(value, JsonOptions);
-        return Prefix + Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
-    }
+    private static string EncodeNode(JsonObject json) =>
+        Prefix + Convert.ToBase64String(Encoding.UTF8.GetBytes(json.ToJsonString()));
 
-    private static bool TryDecode<T>(string? payload, out T? value)
+    private static bool TryParseObject(string? payload, out JsonObject? value)
     {
         value = default;
         if (string.IsNullOrWhiteSpace(payload) || !payload.StartsWith(Prefix, StringComparison.Ordinal))
@@ -61,7 +113,7 @@ internal static class PipeProtocol
         try
         {
             var json = Encoding.UTF8.GetString(Convert.FromBase64String(payload[Prefix.Length..]));
-            value = JsonSerializer.Deserialize<T>(json, JsonOptions);
+            value = JsonNode.Parse(json) as JsonObject;
             return value is not null;
         }
         catch

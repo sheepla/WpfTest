@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0-windows;net9.0-windows</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <SelfContained>false</SelfContained>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WpfInspector.InspectionPayload\WpfInspector.InspectionPayload.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\WpfInspector.TestHelper\UiCommandHandler.cs" Link="UiCommandHandler.cs" />
+    <Compile Include="..\WpfInspector.TestHelper\Protocol\PipeProtocol.cs" Link="Protocol\PipeProtocol.cs" />
+  </ItemGroup>
+</Project>

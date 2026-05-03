@@ -26,8 +26,15 @@
     <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.TestHelper\WpfInspector.TestHelper.csproj"
              Targets="Build"
              Properties="Configuration=$(Configuration);TargetFramework=net9.0-windows" />
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.TestRuntime\WpfInspector.TestRuntime.csproj"
+             Targets="Restore"
+             Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.TestRuntime\WpfInspector.TestRuntime.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration);TargetFramework=net9.0-windows" />
     <ItemGroup>
       <_TestHelperFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.TestHelper\bin\$(Configuration)\net9.0-windows\WpfInspector.TestHelper.*" />
+      <_TestHelperFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.TestRuntime\bin\$(Configuration)\net9.0-windows\WpfInspector.TestRuntime.*" />
     </ItemGroup>
     <Copy SourceFiles="@(_TestHelperFiles)"
           DestinationFolder="$(OutputPath)"
@@ -95,9 +102,16 @@
     <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.TestHelper\WpfInspector.TestHelper.csproj"
              Targets="Build"
              Properties="Configuration=$(Configuration);TargetFramework=$(CompatibleInjectionTargetFramework)" />
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.TestRuntime\WpfInspector.TestRuntime.csproj"
+             Targets="Restore"
+             Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.TestRuntime\WpfInspector.TestRuntime.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration);TargetFramework=$(CompatibleInjectionTargetFramework)" />
     <MakeDir Directories="$(CompatibleInjectionAssetsOutputDir)" />
     <ItemGroup>
       <_CompatibleInjectionFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.TestHelper\bin\$(Configuration)\$(CompatibleInjectionTargetFramework)\WpfInspector.TestHelper.*" />
+      <_CompatibleInjectionFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.TestRuntime\bin\$(Configuration)\$(CompatibleInjectionTargetFramework)\WpfInspector.TestRuntime.*" />
       <_CompatibleInjectionFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.InspectionPayload\bin\$(Configuration)\$(CompatibleInjectionTargetFramework)\WpfInspector.InspectionPayload.*" />
       <_CompatibleInjectionFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.Core\bin\$(Configuration)\$(CompatibleInjectionCoreTargetFramework)\WpfInspector.Core.dll" />
     </ItemGroup>

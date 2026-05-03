@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -22,7 +23,7 @@ using WpfInspector.Protocol;
 
 namespace WpfInspector.TestHelper;
 
-internal static class UiCommandHandler
+internal static partial class UiCommandHandler
 {
     private const int MaxDepth = 20;
     private const int MaxChildren = 40;
@@ -30,10 +31,6 @@ internal static class UiCommandHandler
 
     private static readonly object LogSync = new();
     private static readonly object TraceSync = new();
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = false
-    };
 
     private static TraceSession? _traceSession;
 
@@ -44,62 +41,63 @@ internal static class UiCommandHandler
             .TrimStart('.');
         Log($"RunAsync start full='{fullPipeName}' pipe='{pipeName}'");
 
-        while (true)
+        try
         {
-            try
+            // 1 回の注入につき 1 セッションだけ処理する。切断後の再接続は行わず、
+            // 必要なら呼び出し側が新しい DLL を再注入する。
+            await using var pipe = new NamedPipeClientStream(
+                ".",
+                pipeName,
+                PipeDirection.InOut,
+                PipeOptions.Asynchronous);
+
+            using var cts = new CancellationTokenSource(30_000);
+            Log($"Connecting to server pipe='{pipeName}'");
+            await pipe.ConnectAsync(cts.Token);
+            Log($"Connected pipe='{pipeName}'");
+
+            using var reader = new StreamReader(
+                pipe,
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                detectEncodingFromByteOrderMarks: true,
+                bufferSize: 1024,
+                leaveOpen: true);
+            await using var writer = new StreamWriter(
+                pipe,
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                bufferSize: 1024,
+                leaveOpen: true)
             {
-                await using var pipe = new NamedPipeClientStream(
-                    ".",
-                    pipeName,
-                    PipeDirection.InOut,
-                    PipeOptions.Asynchronous);
+                AutoFlush = true,
+                NewLine = "\n"
+            };
 
-                using var cts = new CancellationTokenSource(30_000);
-                Log($"Connecting to server pipe='{pipeName}'");
-                await pipe.ConnectAsync(cts.Token);
-                Log($"Connected pipe='{pipeName}'");
+            await writer.WriteLineAsync("READY");
+            Log($"Sent READY pipe='{pipeName}'");
 
-                using var reader = new StreamReader(
-                    pipe,
-                    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-                    detectEncodingFromByteOrderMarks: true,
-                    bufferSize: 1024,
-                    leaveOpen: true);
-                await using var writer = new StreamWriter(
-                    pipe,
-                    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-                    bufferSize: 1024,
-                    leaveOpen: true)
+            string? line;
+            while ((line = await reader.ReadLineAsync()) is not null)
+            {
+                Log($"Received command='{line}' pipe='{pipeName}'");
+                if (line == "EXIT")
                 {
-                    AutoFlush = true,
-                    NewLine = "\n"
-                };
-
-                await writer.WriteLineAsync("READY");
-                Log($"Sent READY pipe='{pipeName}'");
-
-                string? line;
-                while ((line = await reader.ReadLineAsync()) is not null)
-                {
-                    Log($"Received command='{line}' pipe='{pipeName}'");
-                    if (line == "EXIT")
-                    {
-                        Log($"Received EXIT pipe='{pipeName}'");
-                        break;
-                    }
-
-                    var response = await DispatchAsync(line);
-                    Log($"Sending response length={response.Length} pipe='{pipeName}'");
-                    await writer.WriteLineAsync(response);
+                    Log($"Received EXIT pipe='{pipeName}'");
+                    return;
                 }
-            }
-            catch (Exception exception)
-            {
-                Log($"Loop exception pipe='{pipeName}' error={exception}");
+
+                var response = await DispatchAsync(line);
+                Log($"Sending response length={response.Length} pipe='{pipeName}'");
+                await writer.WriteLineAsync(response);
             }
 
-            await Task.Delay(250);
+            Log($"Server disconnected pipe='{pipeName}'");
         }
+        catch (Exception exception)
+        {
+            Log($"RunAsync exception pipe='{pipeName}' error={exception}");
+        }
+
+        Log($"RunAsync exit pipe='{pipeName}'");
     }
 
     private static async Task<string> DispatchAsync(string command)
@@ -229,7 +227,7 @@ internal static class UiCommandHandler
             data: JsonSerializer.SerializeToNode(new ElementDetailsEnvelope(
                 elementName,
                 details!),
-                JsonOptions),
+                WorkerJsonContext.Default.ElementDetailsEnvelope),
             requestId: request.RequestId);
     }
 
@@ -237,7 +235,9 @@ internal static class UiCommandHandler
     {
         var inspection = SelfInspection.InspectCurrentProcess();
         return PipeProtocol.Success(
-            data: JsonSerializer.SerializeToNode(inspection, JsonOptions),
+            data: JsonSerializer.SerializeToNode(
+                inspection,
+                WpfInspectionJsonContext.Default.WpfInspectionResult),
             requestId: request.RequestId);
     }
 
@@ -331,7 +331,7 @@ internal static class UiCommandHandler
                     TotalMatchCount: totalMatchCount,
                     Truncated: totalMatchCount > matches.Count,
                     Elements: matches),
-                JsonOptions),
+                WorkerJsonContext.Default.FindElementsResult),
             requestId: request.RequestId);
     }
 
@@ -355,7 +355,7 @@ internal static class UiCommandHandler
                 elementName,
                 propertyName,
                 bindings!),
-                JsonOptions),
+                WorkerJsonContext.Default.BindingDetailsEnvelope),
             requestId: request.RequestId);
     }
 
@@ -381,7 +381,7 @@ internal static class UiCommandHandler
         }
 
         return PipeProtocol.Success(
-            data: JsonSerializer.SerializeToNode(commandState, JsonOptions),
+            data: JsonSerializer.SerializeToNode(commandState, WorkerJsonContext.Default.CommandStateResult),
             requestId: request.RequestId);
     }
 
@@ -390,7 +390,7 @@ internal static class UiCommandHandler
         PopupListResult? result = null;
         InvokeOnUiThread(() => result = new PopupListResult(CollectPopupStates()));
         return PipeProtocol.Success(
-            data: JsonSerializer.SerializeToNode(result, JsonOptions),
+            data: JsonSerializer.SerializeToNode(result!, WorkerJsonContext.Default.PopupListResult),
             requestId: request.RequestId);
     }
 
@@ -433,7 +433,7 @@ internal static class UiCommandHandler
         RefreshTraceSubscriptionsIfActive();
 
         return PipeProtocol.Success(
-            data: JsonSerializer.SerializeToNode(result, JsonOptions),
+            data: JsonSerializer.SerializeToNode(result!, WorkerJsonContext.Default.ActionResult),
             requestId: request.RequestId);
     }
 
@@ -468,7 +468,7 @@ internal static class UiCommandHandler
                     TimeoutMs: timeoutMs,
                     ReachedIdle: false,
                     WaitedMs: stopwatch.ElapsedMilliseconds),
-                    JsonOptions));
+                    WorkerJsonContext.Default.WaitForIdleResult));
         }
 
         var waitedMs = await idleOperation.Task;
@@ -479,7 +479,7 @@ internal static class UiCommandHandler
                 TimeoutMs: timeoutMs,
                 ReachedIdle: true,
                 WaitedMs: waitedMs),
-            JsonOptions),
+            WorkerJsonContext.Default.WaitForIdleResult),
             requestId: request.RequestId);
     }
 
@@ -513,7 +513,7 @@ internal static class UiCommandHandler
                         ActualValue: lastEvaluation.ActualValue,
                         Matched: false,
                         WaitedMs: stopwatch.ElapsedMilliseconds),
-                        JsonOptions));
+                        WorkerJsonContext.Default.WaitForConditionResult));
             }
 
             if (lastEvaluation.Matched)
@@ -533,7 +533,7 @@ internal static class UiCommandHandler
                         ActualValue: lastEvaluation.ActualValue,
                         Matched: true,
                         WaitedMs: stopwatch.ElapsedMilliseconds),
-                        JsonOptions),
+                        WorkerJsonContext.Default.WaitForConditionResult),
                     requestId: request.RequestId);
             }
 
@@ -559,7 +559,7 @@ internal static class UiCommandHandler
                         ActualValue: lastEvaluation.ActualValue,
                         Matched: false,
                         WaitedMs: stopwatch.ElapsedMilliseconds),
-                        JsonOptions));
+                        WorkerJsonContext.Default.WaitForConditionResult));
             }
 
             RefreshTraceSubscriptionsIfActive();
@@ -635,7 +635,7 @@ internal static class UiCommandHandler
         RecordTraceEvent("select_item", element, $"selectedIndex={result!.SelectedIndex}");
         RefreshTraceSubscriptionsIfActive();
         return PipeProtocol.Success(
-            data: JsonSerializer.SerializeToNode(result, JsonOptions),
+            data: JsonSerializer.SerializeToNode(result, WorkerJsonContext.Default.SelectionResult),
             requestId: request.RequestId);
     }
 
@@ -690,7 +690,7 @@ internal static class UiCommandHandler
                 IsExpanded: expand);
         });
         return PipeProtocol.Success(
-            data: JsonSerializer.SerializeToNode(result, JsonOptions),
+            data: JsonSerializer.SerializeToNode(result!, WorkerJsonContext.Default.ToggleResult),
             requestId: request.RequestId);
     }
 
@@ -750,7 +750,7 @@ internal static class UiCommandHandler
                 Succeeded: true);
         });
         return PipeProtocol.Success(
-            data: JsonSerializer.SerializeToNode(result, JsonOptions),
+            data: JsonSerializer.SerializeToNode(result!, WorkerJsonContext.Default.ActionResult),
             requestId: request.RequestId);
     }
 
@@ -776,7 +776,7 @@ internal static class UiCommandHandler
                 StoppedAtUtc: null,
                 EventCount: _traceSession.Events.Count,
                 Diff: null),
-                JsonOptions),
+                WorkerJsonContext.Default.TraceStateResult),
             requestId: request.RequestId);
     }
 
@@ -811,7 +811,7 @@ internal static class UiCommandHandler
         }
 
         return PipeProtocol.Success(
-            data: JsonSerializer.SerializeToNode(result, JsonOptions),
+            data: JsonSerializer.SerializeToNode(result, WorkerJsonContext.Default.TraceStateResult),
             requestId: request.RequestId);
     }
 
@@ -836,7 +836,7 @@ internal static class UiCommandHandler
                 Diff: BuildSnapshotDiff(_traceSession.StartSnapshot, _traceSession.StopSnapshot ?? CaptureInspectionSnapshot()));
 
             return PipeProtocol.Success(
-                data: JsonSerializer.SerializeToNode(result, JsonOptions),
+                data: JsonSerializer.SerializeToNode(result, WorkerJsonContext.Default.TraceDetailsResult),
                 requestId: request.RequestId);
         }
     }
@@ -858,7 +858,7 @@ internal static class UiCommandHandler
             return PipeProtocol.Success(
                 data: JsonSerializer.SerializeToNode(
                     BuildSnapshotDiff(_traceSession.StartSnapshot, currentSnapshot),
-                    JsonOptions),
+                    WorkerJsonContext.Default.SnapshotDiffResult),
                 requestId: request.RequestId);
         }
     }
@@ -2962,6 +2962,26 @@ internal static class UiCommandHandler
         catch
         {
         }
+    }
+
+    [JsonSourceGenerationOptions(
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        WriteIndented = false)]
+    [JsonSerializable(typeof(ElementDetailsEnvelope))]
+    [JsonSerializable(typeof(FindElementsResult))]
+    [JsonSerializable(typeof(BindingDetailsEnvelope))]
+    [JsonSerializable(typeof(CommandStateResult))]
+    [JsonSerializable(typeof(PopupListResult))]
+    [JsonSerializable(typeof(ActionResult))]
+    [JsonSerializable(typeof(WaitForIdleResult))]
+    [JsonSerializable(typeof(WaitForConditionResult))]
+    [JsonSerializable(typeof(SelectionResult))]
+    [JsonSerializable(typeof(ToggleResult))]
+    [JsonSerializable(typeof(TraceStateResult))]
+    [JsonSerializable(typeof(TraceDetailsResult))]
+    [JsonSerializable(typeof(SnapshotDiffResult))]
+    private sealed partial class WorkerJsonContext : JsonSerializerContext
+    {
     }
 
     private sealed record InspectionSnapshot(

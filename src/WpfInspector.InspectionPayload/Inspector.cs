@@ -36,7 +36,7 @@ public static class Inspector
     public static string CollectJson(int processId)
     {
         var result = CollectResult(processId);
-        return JsonSerializer.Serialize(result);
+        return JsonSerializer.Serialize(result, WpfInspectionJsonContext.Default.WpfInspectionResult);
     }
 
     internal static WpfInspectionResult CollectResult(int processId)

@@ -16,8 +16,16 @@ public static class EntryPoint
         if (string.IsNullOrEmpty(pipeName))
             return -1;
 
-        // UI スレッドを占有しないようバックグラウンドで起動
-        _ = Task.Run(() => UiCommandHandler.RunAsync(pipeName));
+        // 既定の AssemblyLoadContext には小さい host だけを残し、
+        // 実作業は collectible ALC にロードした worker へ委譲する。
+        CollectibleSessionHost.StartSession(pipeName);
         return 0;
     }
+
+    public static InjectionHostDiagnostics GetDiagnostics() =>
+        CollectibleSessionHost.GetDiagnostics();
+
+    public static Task<bool> WaitForIdleAsync(int timeoutMs = 5_000) =>
+        CollectibleSessionHost.WaitForIdleAsync(
+            TimeSpan.FromMilliseconds(Math.Max(1, timeoutMs)));
 }

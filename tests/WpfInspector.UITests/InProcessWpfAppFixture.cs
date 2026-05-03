@@ -75,6 +75,7 @@ public sealed class InProcessWpfAppFixture : IAsyncLifetime
         {
             await _rpc.DisposeAsync();
             _rpc = null;
+            await WaitForHelperIdleAsync(TimeSpan.FromSeconds(5));
         }
 
         if (_dispatcher is not null)
@@ -130,6 +131,34 @@ public sealed class InProcessWpfAppFixture : IAsyncLifetime
 
     public Task ResetAsync() =>
         InvokeAsync(window => window.ResetState());
+
+    public async Task DisconnectHelperAsync()
+    {
+        if (_rpc is null)
+        {
+            return;
+        }
+
+        await _rpc.DisposeAsync();
+        _rpc = null;
+    }
+
+    public async Task ReconnectHelperAsync()
+    {
+        if (_rpc is not null)
+        {
+            return;
+        }
+
+        _rpc = await RpcPipeConnection.StartAsync(StartupTimeout);
+    }
+
+    public Task<bool> WaitForHelperIdleAsync(TimeSpan? timeout = null) =>
+        WpfInspector.TestHelper.EntryPoint.WaitForIdleAsync(
+            (int)(timeout ?? StartupTimeout).TotalMilliseconds);
+
+    public WpfInspector.TestHelper.InjectionHostDiagnostics GetHelperDiagnostics() =>
+        WpfInspector.TestHelper.EntryPoint.GetDiagnostics();
 
     public Task<RpcResponse> SendRequestAsync(string operation, object? arguments = null) =>
         GetRpc().SendRequestAsync(operation, arguments);

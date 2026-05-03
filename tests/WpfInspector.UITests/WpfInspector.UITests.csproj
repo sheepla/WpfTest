@@ -25,4 +25,17 @@
              Targets="Build"
              Properties="Configuration=$(Configuration)" />
   </Target>
+
+  <Target Name="CopyInjecteeWorker" AfterTargets="Build">
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\..\src\WpfInspector.TestRuntime\WpfInspector.TestRuntime.csproj"
+             Targets="Restore"
+             Properties="Configuration=$(Configuration)" />
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\..\src\WpfInspector.TestRuntime\WpfInspector.TestRuntime.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration);TargetFramework=net9.0-windows" />
+    <ItemGroup>
+      <_InjecteeWorkerFiles Include="$(MSBuildThisFileDirectory)..\..\src\WpfInspector.TestRuntime\bin\$(Configuration)\net9.0-windows\WpfInspector.TestRuntime.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_InjecteeWorkerFiles)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+  </Target>
 </Project>
