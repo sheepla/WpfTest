@@ -170,7 +170,7 @@ public sealed class WpfAppFixture : IAsyncLifetime
         var candidates = configurations
             .Select(configuration => FindInParents(
                 here,
-                Path.Combine("src", "WpfInspector.App", "bin", configuration, "net9.0-windows", "WpfInspector.App.exe")))
+                Path.Combine("src", "WpfInspector.App", "bin", configuration, "net10.0-windows", "WpfInspector.App.exe")))
             .Concat(
             [
                 Path.Combine(here, "WpfInspector.App.exe")

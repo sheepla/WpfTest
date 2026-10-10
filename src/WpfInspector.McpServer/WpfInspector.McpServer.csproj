@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net9.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>WpfInspector.McpServer</RootNamespace>
@@ -21,7 +21,7 @@
 
   <ItemGroup>
     <PackageReference Include="ModelContextProtocol" Version="1.2.0" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.*" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.*" />
   </ItemGroup>
 
   <ItemGroup>
@@ -41,16 +41,16 @@
              Properties="Configuration=$(Configuration)" />
     <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.TestHelper\WpfInspector.TestHelper.csproj"
              Targets="Build"
-             Properties="Configuration=$(Configuration);TargetFramework=net9.0-windows" />
+             Properties="Configuration=$(Configuration);TargetFramework=net10.0-windows" />
     <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.TestRuntime\WpfInspector.TestRuntime.csproj"
              Targets="Restore"
              Properties="Configuration=$(Configuration)" />
     <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.TestRuntime\WpfInspector.TestRuntime.csproj"
              Targets="Build"
-             Properties="Configuration=$(Configuration);TargetFramework=net9.0-windows" />
+             Properties="Configuration=$(Configuration);TargetFramework=net10.0-windows" />
     <ItemGroup>
-      <_TestHelperFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.TestHelper\bin\$(Configuration)\net9.0-windows\WpfInspector.TestHelper.*" />
-      <_TestHelperFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.TestRuntime\bin\$(Configuration)\net9.0-windows\WpfInspector.TestRuntime.*" />
+      <_TestHelperFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.TestHelper\bin\$(Configuration)\net10.0-windows\WpfInspector.TestHelper.*" />
+      <_TestHelperFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.TestRuntime\bin\$(Configuration)\net10.0-windows\WpfInspector.TestRuntime.*" />
     </ItemGroup>
     <Copy SourceFiles="@(_TestHelperFiles)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
     <!-- hostfxr セカンダリコンテキスト向けに runtimeconfig を最小構成で上書き -->
@@ -58,12 +58,12 @@
       File="$(OutputPath)WpfInspector.TestHelper.runtimeconfig.json"
       Lines='{
   "runtimeOptions": {
-    "tfm": "net9.0",
+    "tfm": "net10.0",
     "rollForward": "LatestMinor",
     "frameworks": [
       {
         "name": "Microsoft.NETCore.App",
-        "version": "9.0.0"
+        "version": "10.0.0"
       }
     ]
   }
@@ -77,9 +77,9 @@
              Properties="Configuration=$(Configuration)" />
     <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.InspectionPayload\WpfInspector.InspectionPayload.csproj"
              Targets="Build"
-             Properties="Configuration=$(Configuration);TargetFramework=net9.0-windows" />
+             Properties="Configuration=$(Configuration);TargetFramework=net10.0-windows" />
     <ItemGroup>
-      <_PayloadFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.InspectionPayload\bin\$(Configuration)\net9.0-windows\WpfInspector.InspectionPayload.*" />
+      <_PayloadFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.InspectionPayload\bin\$(Configuration)\net10.0-windows\WpfInspector.InspectionPayload.*" />
     </ItemGroup>
     <Copy SourceFiles="@(_PayloadFiles)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
   </Target>

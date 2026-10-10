@@ -12,7 +12,7 @@
 
 ### 前提条件
 
-- .NET 9 SDK（Windows x64）
+- .NET 10 SDK（Windows x64）
 - Windows x64 環境
 - `WpfInspector.NativeBootstrap.dll` のビルド済みバイナリ（UI 操作系ツール使用時に必要）
 

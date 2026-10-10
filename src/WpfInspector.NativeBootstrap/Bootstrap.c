@@ -1,6 +1,6 @@
 /*
  * Bootstrap.c
- * 対象の .NET 9 プロセスに LoadLibraryW で注入されるネイティブ DLL。
+ * 対象の .NET 8 以降のプロセスに LoadLibraryW で注入されるネイティブ DLL。
  * hostfxr.dll (既にプロセス内に存在) の API を使って
  * WpfInspector.InspectionPayload.dll をデフォルト AssemblyLoadContext に読み込む。
  */

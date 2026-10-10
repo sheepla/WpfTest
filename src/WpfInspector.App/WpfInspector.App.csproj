@@ -25,16 +25,16 @@
              Properties="Configuration=$(Configuration)" />
     <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.TestHelper\WpfInspector.TestHelper.csproj"
              Targets="Build"
-             Properties="Configuration=$(Configuration);TargetFramework=net9.0-windows" />
+             Properties="Configuration=$(Configuration);TargetFramework=net10.0-windows" />
     <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.TestRuntime\WpfInspector.TestRuntime.csproj"
              Targets="Restore"
              Properties="Configuration=$(Configuration)" />
     <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.TestRuntime\WpfInspector.TestRuntime.csproj"
              Targets="Build"
-             Properties="Configuration=$(Configuration);TargetFramework=net9.0-windows" />
+             Properties="Configuration=$(Configuration);TargetFramework=net10.0-windows" />
     <ItemGroup>
-      <_TestHelperFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.TestHelper\bin\$(Configuration)\net9.0-windows\WpfInspector.TestHelper.*" />
-      <_TestHelperFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.TestRuntime\bin\$(Configuration)\net9.0-windows\WpfInspector.TestRuntime.*" />
+      <_TestHelperFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.TestHelper\bin\$(Configuration)\net10.0-windows\WpfInspector.TestHelper.*" />
+      <_TestHelperFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.TestRuntime\bin\$(Configuration)\net10.0-windows\WpfInspector.TestRuntime.*" />
     </ItemGroup>
     <Copy SourceFiles="@(_TestHelperFiles)"
           DestinationFolder="$(OutputPath)"
@@ -50,12 +50,12 @@
       File="$(OutputPath)WpfInspector.TestHelper.runtimeconfig.json"
       Lines='{
   "runtimeOptions": {
-    "tfm": "net9.0",
+    "tfm": "net10.0",
     "rollForward": "LatestMinor",
     "frameworks": [
       {
         "name": "Microsoft.NETCore.App",
-        "version": "9.0.0"
+        "version": "10.0.0"
       }
     ]
   }
@@ -73,9 +73,9 @@
              Properties="Configuration=$(Configuration)" />
     <MSBuild Projects="$(MSBuildThisFileDirectory)..\WpfInspector.InspectionPayload\WpfInspector.InspectionPayload.csproj"
              Targets="Build"
-             Properties="Configuration=$(Configuration);TargetFramework=net9.0-windows" />
+             Properties="Configuration=$(Configuration);TargetFramework=net10.0-windows" />
     <ItemGroup>
-      <_PayloadFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.InspectionPayload\bin\$(Configuration)\net9.0-windows\WpfInspector.InspectionPayload.*" />
+      <_PayloadFiles Include="$(MSBuildThisFileDirectory)..\WpfInspector.InspectionPayload\bin\$(Configuration)\net10.0-windows\WpfInspector.InspectionPayload.*" />
     </ItemGroup>
     <Copy SourceFiles="@(_PayloadFiles)"
           DestinationFolder="$(OutputPath)"
@@ -84,7 +84,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net9.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>

@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
 using WpfInspector.Core.Models;
 
@@ -279,12 +280,12 @@ public sealed class ObservabilitySurfaceTests(InProcessWpfAppFixture fixture) : 
     [Fact]
     public async Task Injected_worker_unloads_after_disconnect_and_can_reconnect()
     {
-        var baselineWorkerAssemblyCount = GetWorkerAssemblies().Count;
-        var baselineCollectibleWorkerAssemblyCount = GetWorkerAssemblies()
-            .Count(assembly => AssemblyLoadContext.GetLoadContext(assembly)?.IsCollectible == true);
+        var baseline = ObserveWorkerUnloadState();
+        var baselineWorkerAssemblyCount = baseline.WorkerAssemblyCount;
+        var baselineCollectibleWorkerAssemblyCount = baseline.CollectibleWorkerAssemblyCount;
         var baselineNonCollectibleWorkerAssemblyCount =
             baselineWorkerAssemblyCount - baselineCollectibleWorkerAssemblyCount;
-        var baselineCollectibleContextCount = GetCollectibleWorkerContextCount();
+        var baselineCollectibleContextCount = baseline.CollectibleContextCount;
 
         await _fixture.SendSuccessfulObjectAsync("get_inspection_result");
         await _fixture.DisconnectHelperAsync();
@@ -302,7 +303,7 @@ public sealed class ObservabilitySurfaceTests(InProcessWpfAppFixture fixture) : 
         var unloadObserved = await WaitForWorkerUnloadStateAsync(
             baselineNonCollectibleWorkerAssemblyCount,
             TimeSpan.FromSeconds(10));
-        Assert.True(unloadObserved, "Worker assemblies did not fully leave the collectible context before the timeout.");
+        Assert.True(unloadObserved, "Worker assemblies did not fully leave the collectible context before the timeout. " + BuildUnloadReport(baselineNonCollectibleWorkerAssemblyCount));
 
         await _fixture.ReconnectHelperAsync();
 
@@ -313,11 +314,9 @@ public sealed class ObservabilitySurfaceTests(InProcessWpfAppFixture fixture) : 
     [Fact]
     public async Task Idle_helper_session_unloads_after_disconnect()
     {
-        var baselineWorkerAssemblyCount = GetWorkerAssemblies().Count;
-        var baselineCollectibleWorkerAssemblyCount = GetWorkerAssemblies()
-            .Count(assembly => AssemblyLoadContext.GetLoadContext(assembly)?.IsCollectible == true);
+        var baseline = ObserveWorkerUnloadState();
         var baselineNonCollectibleWorkerAssemblyCount =
-            baselineWorkerAssemblyCount - baselineCollectibleWorkerAssemblyCount;
+            baseline.WorkerAssemblyCount - baseline.CollectibleWorkerAssemblyCount;
 
         await _fixture.DisconnectHelperAsync();
 
@@ -327,7 +326,7 @@ public sealed class ObservabilitySurfaceTests(InProcessWpfAppFixture fixture) : 
         var unloadObserved = await WaitForWorkerUnloadStateAsync(
             expectedWorkerAssemblyCount: baselineNonCollectibleWorkerAssemblyCount,
             timeout: TimeSpan.FromSeconds(10));
-        Assert.True(unloadObserved, "Idle helper session did not unload before the timeout.");
+        Assert.True(unloadObserved, "Idle helper session did not unload before the timeout. " + BuildUnloadReport(baselineNonCollectibleWorkerAssemblyCount));
 
         await _fixture.ReconnectHelperAsync();
         var inspection = await _fixture.SendSuccessfulObjectAsync("get_inspection_result");
@@ -347,18 +346,44 @@ public sealed class ObservabilitySurfaceTests(InProcessWpfAppFixture fixture) : 
         }
     }
 
-    private static IReadOnlyList<System.Reflection.Assembly> GetWorkerAssemblies() =>
-        AppDomain.CurrentDomain.GetAssemblies()
+    // Assembly 参照を保持したローカル (List<Assembly> など) は、それ自体が
+    // コレクティブ ALC のアンロードを妨げる自己ルートになるため、
+    // カウントのみを返す NonInlining メソッドに切り出して観測する。
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WorkerUnloadSnapshot ObserveWorkerUnloadState()
+    {
+        var workerAssemblies = AppDomain.CurrentDomain.GetAssemblies()
             .Where(assembly => string.Equals(
                 assembly.GetName().Name,
                 "WpfInspector.TestRuntime",
                 StringComparison.Ordinal))
             .ToList();
 
-    private static int GetCollectibleWorkerContextCount() =>
-        AssemblyLoadContext.All.Count(context =>
-            context.IsCollectible &&
-            (context.Name?.StartsWith("WpfInspector.TestRuntime::", StringComparison.Ordinal) ?? false));
+        return new WorkerUnloadSnapshot(
+            workerAssemblies.Count,
+            workerAssemblies.Count(assembly =>
+                AssemblyLoadContext.GetLoadContext(assembly)?.IsCollectible == true),
+            AssemblyLoadContext.All.Count(context =>
+                context.IsCollectible &&
+                (context.Name?.StartsWith("WpfInspector.TestRuntime::", StringComparison.Ordinal) ?? false)));
+    }
+
+    private string BuildUnloadReport(int expectedCount)
+    {
+        var snapshot = ObserveWorkerUnloadState();
+        var assemblies = string.Join(" | ", AppDomain.CurrentDomain.GetAssemblies()
+            .Where(assembly => string.Equals(
+                assembly.GetName().Name,
+                "WpfInspector.TestRuntime",
+                StringComparison.Ordinal))
+            .Select(assembly =>
+                $"{assembly.GetName().Version}@{AssemblyLoadContext.GetLoadContext(assembly)?.Name ?? "<null>"}(collectible={AssemblyLoadContext.GetLoadContext(assembly)?.IsCollectible})"));
+        var contexts = string.Join(" | ", AssemblyLoadContext.All
+            .Where(context => context.IsCollectible)
+            .Select(context => context.Name ?? "<unnamed>"));
+        var diagnostics = _fixture.GetHelperDiagnostics();
+        return $"expected={expectedCount} snapshot={snapshot} assemblies=[{assemblies}] collectibleContexts=[{contexts}] diagnostics={diagnostics}";
+    }
 
     private static async Task<bool> WaitForWorkerUnloadStateAsync(
         int expectedWorkerAssemblyCount,
@@ -367,12 +392,10 @@ public sealed class ObservabilitySurfaceTests(InProcessWpfAppFixture fixture) : 
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
-            var workerAssemblies = GetWorkerAssemblies();
-            var collectibleAssemblyCount = workerAssemblies
-                .Count(assembly => AssemblyLoadContext.GetLoadContext(assembly)?.IsCollectible == true);
-            if (workerAssemblies.Count == expectedWorkerAssemblyCount
-                && collectibleAssemblyCount == 0
-                && GetCollectibleWorkerContextCount() == 0)
+            var snapshot = ObserveWorkerUnloadState();
+            if (snapshot.WorkerAssemblyCount == expectedWorkerAssemblyCount
+                && snapshot.CollectibleWorkerAssemblyCount == 0
+                && snapshot.CollectibleContextCount == 0)
             {
                 return true;
             }
@@ -385,6 +408,11 @@ public sealed class ObservabilitySurfaceTests(InProcessWpfAppFixture fixture) : 
 
         return false;
     }
+
+    private readonly record struct WorkerUnloadSnapshot(
+        int WorkerAssemblyCount,
+        int CollectibleWorkerAssemblyCount,
+        int CollectibleContextCount);
 
     private static WpfElementInfo FindElement(WpfElementInfo root, string identifier) =>
         EnumerateElements(root)
